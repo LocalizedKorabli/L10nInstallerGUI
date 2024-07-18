@@ -15,18 +15,23 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 import urllib.request
 # pip install urllib3==1.25.11
 # The newer urllib has break changes.
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 from tkinter import ttk
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
+import polib
 import requests
+
+version = '2024.07.18.2350'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -38,13 +43,37 @@ locale_config = '''<locale_config>
 </locale_config>
 '''
 
+download_routes = {
+    'r': {
+        'gitee': {
+            'url': 'https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/',
+            'direct': False
+        },
+        'github': {
+            'url': 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/',
+            'direct': False
+        }
+    },
+    'pt': {
+        'gitee': {
+            'url': 'https://gitee.com/localized-korabli/Korabli-LESTA-L10N-PublicTest/raw/Localizations/Localizations'
+                   '/latest/',
+            'direct': False
+        },
+        'github': {
+            'url': 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N-PublicTest/raw/Localizations/Localizations'
+                   '/latest/',
+            'direct': False
+        }
+    }
+}
+
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
-resource_path: str = os.path.join(base_path, "resources")
-_run_dir: str = ''
-is_installing: bool = False
+resource_path: str = os.path.join(base_path, 'resources')
 
 
 class LocalizationInstaller:
+    # GUI Related
     game_version: tk.StringVar
     localization_status: tk.StringVar
     is_release: tk.BooleanVar
@@ -55,13 +84,19 @@ class LocalizationInstaller:
     install_progress: tk.StringVar
     download_info: tk.StringVar
 
+    # Variables
+    human_readable_version: str = ''
+    installed_l10n_version = ''
+    run_dir: str = ''
+    is_installing: bool = False
+
     def __init__(self, parent: tk.Tk):
         mkdir('l10n_installer/cache')
         mkdir('l10n_installer/downloads')
         mkdir('l10n_installer/mods')
         mkdir('l10n_installer/processed')
         self.root = parent
-        self.root.title('LocalizedKorabli汉化安装器')
+        self.root.title(f'LocalizedKorabli汉化安装器-v{version}')
         half_screen_width = int(self.root.winfo_screenwidth() / 2) - 150
         half_screen_height = int(self.root.winfo_screenheight() / 2) - 150
         self.root.geometry(f'+{half_screen_width}+{half_screen_height}')
@@ -80,12 +115,12 @@ class LocalizationInstaller:
         # 第一行：游戏版本
         tk.Label(parent, textvariable=self.game_version) \
             .grid(row=0, column=0, columnspan=3, sticky=tk.W)
-        self.game_version.set('游戏版本：' + self.get_run_dir())
+        self.game_version.set('游戏版本：' + self.get_human_readable_version())
 
         # 第二行：汉化状态
         tk.Label(parent, textvariable=self.localization_status) \
             .grid(row=1, column=0, columnspan=3, sticky=tk.W)
-        self.localization_status.set('汉化状态：' + '未安装')
+        self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
         # 第三行：游戏类型
         tk.Label(parent, text='游戏类型：').grid(row=2, column=0, sticky=tk.W)
@@ -108,9 +143,9 @@ class LocalizationInstaller:
 
         # 第五行：体验增强包/汉化修改包
         ttk.Checkbutton(parent, text='安装体验增强包', variable=self.builtin_mods_selection) \
-            .grid(row=5, column=0, sticky=tk.W)
+            .grid(row=5, column=0, columnspan=2, sticky=tk.W)
         ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
-            .grid(row=5, column=1, columnspan=2, sticky=tk.W)
+            .grid(row=5, column=2, columnspan=2, sticky=tk.W)
 
         # 第六行：安装路径选择/下载进度
         self.install_path_entry = tk.Entry(parent, textvariable=self.mo_path, width=30)
@@ -149,10 +184,9 @@ class LocalizationInstaller:
             self.mo_path.set(mo_path)
 
     def install_update(self):
-        global is_installing
-        if is_installing:
+        if self.is_installing:
             return
-        is_installing = True
+        self.is_installing = True
         thread = threading.Thread(target=self.do_install_update())
         thread.start()
 
@@ -168,14 +202,13 @@ class LocalizationInstaller:
         self.install_progress.set('安装locale_config')
         if not is_release:
             old_cfg = target_path.joinpath('locale_config.xml')
-            old_cfg_renamed = target_path.joinpath('locale_config.xml.old')
-            if not os.path.isfile(old_cfg_renamed):
-                if os.path.isfile(old_cfg):
-                    shutil.copy(old_cfg, old_cfg_renamed)
-            with open(old_cfg, "w", encoding="utf-8") as file:
+            old_cfg_backup = target_path.joinpath('locale_config.xml.old')
+            if not os.path.isfile(old_cfg_backup) and os.path.isfile(old_cfg):
+                shutil.copy(old_cfg, old_cfg_backup)
+            with open(old_cfg, 'w', encoding='utf-8') as file:
                 file.write(locale_config)
         else:
-            with open(target_path.joinpath('locale_config.xml'), "w", encoding="utf-8") as file:
+            with open(target_path.joinpath('locale_config.xml'), 'w', encoding='utf-8') as file:
                 file.write(locale_config)
         self.install_progress.set('安装locale_config——完成')
         proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
@@ -197,7 +230,7 @@ class LocalizationInstaller:
                                 if chunk:
                                     f.write(chunk)
                         ee_ready = True
-                        self.download_info.set("下载体验增强包——完成")
+                        self.download_info.set('下载体验增强包——完成')
                     else:
                         self.download_info.set(f'下载体验增强包——失败（{status}）')
                 except requests.exceptions.RequestException:
@@ -208,25 +241,180 @@ class LocalizationInstaller:
                     self.install_progress.set('安装体验增强包——完成')
                 else:
                     self.install_progress.set('安装体验增强包——失败')
-        self.install_progress.set('安装汉化')
+        # 汉化包
+        self.install_progress.set('安装汉化包')
+        download_src = self.download_source.get()
+        nothing_wrong = True
+        # remote_version = ''
+        # downloaded_mo = ''
+        if download_src != 'local':
+            self.download_info.set('下载汉化包')
+            download_link_base = download_routes['r' if is_release else 'pt'][download_src]['url']
+            # Check and Fetch
+            downloaded: Tuple = self.check_version_and_fetch_mo(download_link_base, proxies)
+            downloaded_mo = downloaded[0]
+            remote_version = downloaded[1]
+        else:
+            downloaded_mo = self.mo_path.get()
+            remote_version = 'local'
+        if not downloaded_mo.endswith('.mo') or not os.path.isfile(downloaded_mo):
+            self.download_info.set('下载汉化包——文件异常')
+            nothing_wrong = False
+        if nothing_wrong:
+            self.download_info.set('下载汉化包——完成')
+            mods = self.get_mods()
+            downloaded_mo = self.parse_and_apply_mods(downloaded_mo, mods)
+            if downloaded_mo == '':
+                self.install_progress.set('安装汉化包——文件损坏')
+                nothing_wrong = False
+        if nothing_wrong:
+            self.install_progress.set('安装汉化包——移动文件')
+            mo_dir = target_path.joinpath('texts').joinpath('ru').joinpath('LC_MESSAGES')
+            mkdir(mo_dir)
+            old_mo = mo_dir.joinpath('global.mo')
+            old_mo_backup = mo_dir.joinpath('global.mo.old')
+            if not is_release:
+                if not os.path.isfile(old_mo_backup) and os.path.isfile(old_mo):
+                    shutil.copy(old_mo, old_mo_backup)
+            shutil.copy(downloaded_mo, old_mo)
+            info_path = Path('bin').joinpath(run_dir).joinpath('l10n')
+            mkdir(info_path)
+            info_file = info_path.joinpath('version.info')
+            with open(info_file, 'w', encoding='utf-8') as f:
+                f.write(remote_version)
+                try:
+                    float(remote_version)
+                except ValueError:
+                    f.write(f'\n{time.time()}')
+        self.is_installing = False
+        self.install_progress.set('完成！' if nothing_wrong else '失败！')
+        self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
-        global is_installing
-        is_installing = False
+    def check_version_and_fetch_mo(self, download_link_base: str, proxies: Dict) -> (str, str):
+        remote_version: str = 'latest'
+        self.download_info.set('下载汉化包——获取版本')
+        try:
+            response = requests.get(download_link_base + 'version.info', stream=True, proxies=proxies)
+            status = response.status_code
+            if status == 200:
+                info_file = 'l10n_installer/downloads/version.info'
+                with open(info_file, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            f.write(chunk)
+                with open(info_file, 'r', encoding='utf-8') as f:
+                    remote_version = f.readline()
+                    self.download_info.set(f'下载汉化包——最新版本为{remote_version}')
+        except requests.exceptions.RequestException:
+            pass
+        valid_version = remote_version != 'latest'
+        if not valid_version:
+            self.download_info.set(f'下载汉化包——版本获取失败')
+        mo_file_name = f'{remote_version}.mo'
+        output_file = f'l10n_installer/downloads/{mo_file_name}'
+        # Check existed
+        if valid_version and self.installed_l10n_version == remote_version:
+            if os.path.isfile(output_file):
+                try:
+                    if polib.mofile(output_file):
+                        self.download_info.set(f'下载汉化包——使用已下载文件')
+                        return output_file, remote_version
+                except Exception:
+                    pass
+        # Download from remote
+        output_file = self.download_mo_from_remote(download_link_base + mo_file_name, output_file, proxies)
+        if valid_version and output_file == '':
+            # valid_version = False
+            remote_version = 'latest'
+            mo_file_name = f'{remote_version}.mo'
+            output_file = f'l10n_installer/downloads/{mo_file_name}'
+            output_file = self.download_mo_from_remote(download_link_base + mo_file_name, output_file, proxies)
+        return output_file, remote_version
+
+    def download_mo_from_remote(self, download_link: str, output_file: str, proxies: Dict) -> str:
+        try:
+            response = requests.get(download_link, stream=True, proxies=proxies)
+            status = response.status_code
+            if status == 200:
+                with open(output_file, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            f.write(chunk)
+                return output_file
+        except requests.exceptions.RequestException:
+            return ''
+
+    def parse_and_apply_mods(self, downloaded_mo: str, mods: List[str]) -> str:
+        try:
+            downloaded_mo_instance = polib.mofile(downloaded_mo)
+        except Exception:
+            return ''
+        if len(mods) == 0:
+            return downloaded_mo
+        self.install_progress.set('安装汉化包——应用模组')
+        for mod in mods:
+            try:
+                process_modification_file(downloaded_mo_instance, mod)
+            except Exception:
+                pass
+        for file in os.listdir('l10n_installer/processed/'):
+            try:
+                os.remove(file)
+            except Exception:
+                continue
+        modded_file_name = f'l10n_installer/processed/modified_{time.time()}.mo'
+        downloaded_mo_instance.save(modded_file_name)
+        return modded_file_name
+
+    def get_mods(self) -> List[str]:
+        if not self.mod_selection.get() or not os.path.isdir('l10n_installer/mods'):
+            return []
+        files = os.listdir('l10n_installer/mods')
+        return [('l10n_installer/mods/' + file) for file in files if (file.endswith('.po') or file.endswith('.mo'))]
 
     def get_run_dir(self) -> str:
-        global _run_dir
-        if _run_dir and _run_dir != '':
-            return _run_dir
+        if self.run_dir and self.run_dir != '':
+            return self.run_dir
+        self.parse_game_version()
+        return self.run_dir
+
+    def get_human_readable_version(self) -> str:
+        if self.human_readable_version and self.human_readable_version != '':
+            return self.human_readable_version
+        self.parse_game_version()
+        return self.human_readable_version
+
+    def parse_game_version(self) -> None:
         if os.path.isfile('game_info.xml'):
             game_info = ET.parse('game_info.xml')
             for version in game_info.findall('.//version'):
                 if version.get('name') == 'locale':
-                    _run_dir = str(version.get('installed').split('.')[-1])
-                    return _run_dir
-            _run_dir = '未知'
-            return _run_dir
-        _run_dir = '未在运行目录下找到战舰世界客户端！'
-        return _run_dir
+                    full_version = str(version.get('installed'))
+                    self.run_dir = full_version.split('.')[-1]
+                    self.human_readable_version = '.'.join(full_version.split('.')[:-1])
+                    return
+            self.human_readable_version = '未知'
+        self.human_readable_version = '未在运行目录下找到战舰世界客户端！'
+
+    def get_local_l10n_version(self) -> str:
+        info_file = Path('bin').joinpath(self.get_run_dir()).joinpath('l10n').joinpath('version.info')
+        if not os.path.isfile(info_file):
+            self.installed_l10n_version = ''
+            return '未安装'
+        with open(info_file, 'r', encoding='utf-8') as f:
+            parsed_version = f.readline()
+            self.installed_l10n_version = parsed_version
+            try:
+                float(parsed_version)
+                return parsed_version
+            except ValueError:
+                pass
+            try:
+                inst_time = float(f.readline())
+                time_formatted = datetime.fromtimestamp(inst_time).strftime('%Y-%m-%d %H:%M:%S')
+                return f'未知，于{time_formatted}安装'
+            except ValueError:
+                return f'未知，安装时间未知'
 
     def toggle_install_path(self, *args):
         if self.download_source.get() == 'local':
@@ -243,6 +431,35 @@ class LocalizationInstaller:
 
 def mkdir(t_dir: Any):
     os.makedirs(t_dir, exist_ok=True)
+
+
+def process_modification_file(source_po, translated_path: str):
+    if translated_path.endswith('po'):
+        translated = polib.pofile(translated_path)
+    else:
+        translated = polib.mofile(translated_path)
+    source_dict_singular = {entry.msgid: entry.msgstr for entry in source_po}
+    translation_dict_singular = {entry.msgid: entry.msgstr for entry in translated if entry.msgid != ''}
+    translation_dict_plural: Dict[str, List[str]] = {entry.msgid_plural: entry.msgstr_plural for entry in
+                                                     translated if entry.msgid_plural != ''}
+    singular_count = len(translation_dict_singular)
+    plural_count = len(translation_dict_singular)
+    for entry in source_po:
+        if singular_count != 0 and entry.msgid and entry.msgid in translation_dict_singular:
+            target_str = translation_dict_singular[entry.msgid]
+            del translation_dict_singular[entry.msgid]
+            singular_count -= 1
+            if entry.msgid == 'IDS_RIGHTS_RESERVED':
+                continue
+            entry.msgstr = target_str
+        if plural_count != 0 and entry.msgid_plural and entry.msgid_plural in translation_dict_plural:
+            entry.msgstr_plural = translation_dict_plural.get(entry.msgid_plural)
+            del translation_dict_plural[entry.msgid_plural]
+            plural_count -= 1
+    if singular_count > 0 or plural_count > 0:
+        for t_entry in translated:
+            if t_entry.msgid and t_entry.msgid not in source_dict_singular:
+                source_po.append(t_entry)
 
 
 def launch_game():
