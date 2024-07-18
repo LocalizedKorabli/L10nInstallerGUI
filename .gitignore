@@ -2,3 +2,6 @@
 /dist
 /build
 *.spec
+game_info.xml
+/bin
+/l10n_installer

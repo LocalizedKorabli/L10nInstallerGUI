@@ -20,12 +20,23 @@ import urllib.request
 # pip install urllib3==1.25.11
 # The newer urllib has break changes.
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 from tkinter import filedialog
 from tkinter import ttk
 from typing import Any
 
 import requests
+
+locale_config = '''<locale_config>
+    <locale_id>ru</locale_id>
+    <text_path>../res/texts</text_path>
+    <text_domain>global</text_domain>
+    <lang_mapping>
+        <lang acceptLang="ru" egs="ru" fonts="CN" full="schinese" languageBar="true" localeRfcName="ru" short="ru" />
+    </lang_mapping>
+</locale_config>
+'''
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, "resources")
@@ -38,7 +49,7 @@ class LocalizationInstaller:
     localization_status: tk.StringVar
     is_release: tk.BooleanVar
     download_source: tk.StringVar
-    rll_selection: tk.BooleanVar
+    builtin_mods_selection: tk.BooleanVar
     mod_selection: tk.BooleanVar
     mo_path: tk.StringVar
     install_progress: tk.StringVar
@@ -52,14 +63,14 @@ class LocalizationInstaller:
         self.root = parent
         self.root.title('LocalizedKorabli汉化安装器')
         half_screen_width = int(self.root.winfo_screenwidth() / 2) - 150
-        half_screen_height = int(self.root.winfo_screenheight() / 2) - 100
+        half_screen_height = int(self.root.winfo_screenheight() / 2) - 150
         self.root.geometry(f'+{half_screen_width}+{half_screen_height}')
 
         self.game_version = tk.StringVar()
         self.localization_status = tk.StringVar()
         self.is_release = tk.BooleanVar()
         self.download_source = tk.StringVar()
-        self.rll_selection = tk.BooleanVar()
+        self.builtin_mods_selection = tk.BooleanVar()
         self.mod_selection = tk.BooleanVar()
         self.mo_path = tk.StringVar()
         self.install_progress = tk.StringVar()
@@ -95,10 +106,10 @@ class LocalizationInstaller:
         ttk.Radiobutton(parent, text='本地文件', variable=self.download_source, value='local') \
             .grid(row=3, column=3, sticky=tk.W)
 
-        # 第五行：RLL/模组
-        ttk.Checkbutton(parent, text='安装RLL', variable=self.rll_selection) \
+        # 第五行：体验增强包/汉化修改包
+        ttk.Checkbutton(parent, text='安装体验增强包', variable=self.builtin_mods_selection) \
             .grid(row=5, column=0, sticky=tk.W)
-        ttk.Checkbutton(parent, text='安装模组（汉化修改包）', variable=self.mod_selection) \
+        ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
             .grid(row=5, column=1, columnspan=2, sticky=tk.W)
 
         # 第六行：安装路径选择/下载进度
@@ -124,7 +135,7 @@ class LocalizationInstaller:
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
 
-        self.rll_selection.set(True)
+        self.builtin_mods_selection.set(True)
         self.mod_selection.set(True)
         self.is_release.set(True)
         self.download_source.set('gitee')
@@ -153,44 +164,52 @@ class LocalizationInstaller:
             return
         is_release = self.is_release.get()
         target_path = Path('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
+        mkdir(target_path)
+        self.install_progress.set('安装locale_config')
+        if not is_release:
+            old_cfg = target_path.joinpath('locale_config.xml')
+            old_cfg_renamed = target_path.joinpath('locale_config.xml.old')
+            if not os.path.isfile(old_cfg_renamed):
+                if os.path.isfile(old_cfg):
+                    shutil.copy(old_cfg, old_cfg_renamed)
+            with open(old_cfg, "w", encoding="utf-8") as file:
+                file.write(locale_config)
+        else:
+            with open(target_path.joinpath('locale_config.xml'), "w", encoding="utf-8") as file:
+                file.write(locale_config)
+        self.install_progress.set('安装locale_config——完成')
         proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
         if is_release:
-            # Logo
-            logo_path = target_path.joinpath('gui').joinpath('game_loading')
-            mkdir(logo_path)
-            shutil.copy(os.path.join(resource_path, 'game_logo.svg'), logo_path.joinpath('game_logo.svg'))
-            shutil.copy(os.path.join(resource_path, 'game_logo_static.svg'), logo_path.joinpath('game_logo_static.svg'))
-            # RLL
-            if self.rll_selection.get():
-                self.install_progress.set('安装RLL')
-                output_file = 'l10n_installer/downloads/team_battle_page.unbound'
-                self.download_info.set('下载RLL——连接中')
-                rll_ready = False
+            # EE
+            if self.builtin_mods_selection.get():
+                self.install_progress.set('安装体验增强包')
+                output_file = 'l10n_installer/downloads/LK_EE.zip'
+                self.download_info.set('下载体验增强包——连接中')
+                ee_ready = False
                 try:
                     response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
-                                            '/BuiltInMods/team_battle_page.unbound', stream=True, proxies=proxies)
+                                            '/BuiltInMods/LKExperienceEnhancement.zip', stream=True, proxies=proxies)
                     status = response.status_code
                     if status == 200:
-                        self.download_info.set('下载RLL——下载中')
+                        self.download_info.set('下载体验增强包——下载中')
                         with open(output_file, 'wb') as f:
                             for chunk in response.iter_content(chunk_size=1024):
                                 if chunk:
                                     f.write(chunk)
-                        rll_ready = True
-                        self.download_info.set("下载RLL——完成")
+                        ee_ready = True
+                        self.download_info.set("下载体验增强包——完成")
                     else:
-                        self.download_info.set(f'下载RLL——失败（{status}）')
+                        self.download_info.set(f'下载体验增强包——失败（{status}）')
                 except requests.exceptions.RequestException:
-                    self.download_info.set('下载RLL——请求异常')
-                if rll_ready:
-                    rll_path = target_path.joinpath("gui").joinpath("unbound2") \
-                        .joinpath("mods").joinpath("RemoveLengthLimit").joinpath("battle").joinpath("battle_loading")
-                    mkdir(rll_path)
-                    shutil.copy(output_file, rll_path.joinpath('team_battle_page.unbound'))
-                    self.install_progress.set('安装RLL——完成')
+                    self.download_info.set('下载体验增强包——请求异常')
+                if ee_ready:
+                    with zipfile.ZipFile(output_file, 'r') as ee_zip:
+                        ee_zip.extractall(target_path)
+                    self.install_progress.set('安装体验增强包——完成')
                 else:
-                    self.install_progress.set('安装RLL——失败')
+                    self.install_progress.set('安装体验增强包——失败')
         self.install_progress.set('安装汉化')
+
         global is_installing
         is_installing = False
 
