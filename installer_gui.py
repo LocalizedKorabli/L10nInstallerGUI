@@ -25,13 +25,11 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
-from tkinter import ttk
 from typing import Any, Dict, List, Tuple
 
 import polib
 import requests
-
-# import ttkbootstrap
+import ttkbootstrap as ttk
 
 version = '0.0.1'
 
@@ -99,9 +97,6 @@ class LocalizationInstaller:
         mkdir('l10n_installer/processed')
         self.root = parent
         self.root.title(f'汉化安装器-v{version}')
-        half_screen_width = int(self.root.winfo_screenwidth() / 2) - 150
-        half_screen_height = int(self.root.winfo_screenheight() / 2) - 150
-        self.root.geometry(f'+{half_screen_width}+{half_screen_height}')
 
         self.game_version = tk.StringVar()
         self.localization_status = tk.StringVar()
@@ -115,17 +110,17 @@ class LocalizationInstaller:
         self.download_info = tk.StringVar()
 
         # 第一行：游戏版本
-        tk.Label(parent, textvariable=self.game_version) \
-            .grid(row=0, column=0, columnspan=3, sticky=tk.W)
+        ttk.Label(parent, textvariable=self.game_version) \
+            .grid(row=0, column=0, columnspan=4, sticky=tk.W)
         self.game_version.set('游戏版本：' + self.get_human_readable_version())
 
         # 第二行：汉化状态
-        tk.Label(parent, textvariable=self.localization_status) \
+        ttk.Label(parent, textvariable=self.localization_status) \
             .grid(row=1, column=0, columnspan=3, sticky=tk.W)
         self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
         # 第三行：游戏类型
-        tk.Label(parent, text='游戏类型：').grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(parent, text='游戏类型：').grid(row=2, column=0, sticky=tk.W)
 
         # 游戏类型选项
         ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True) \
@@ -134,7 +129,7 @@ class LocalizationInstaller:
             .grid(row=2, column=2, sticky=tk.W)
 
         # 第四行：下载源
-        tk.Label(parent, text='汉化来源：').grid(row=3, column=0, sticky=tk.W)
+        ttk.Label(parent, text='汉化来源：').grid(row=3, column=0, sticky=tk.W)
         # 下载源选项
         ttk.Radiobutton(parent, text='Gitee', variable=self.download_source, value='gitee') \
             .grid(row=3, column=1, sticky=tk.W)
@@ -148,30 +143,30 @@ class LocalizationInstaller:
             .grid(row=5, column=0, columnspan=2, sticky=tk.W)
         ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
             .grid(row=6, column=0, columnspan=2, sticky=tk.W)
-        self.mods_button = tk.Button(parent, text='打开汉化修改包文件夹', command=lambda: self.open_mods_folder())
+        self.mods_button = ttk.Button(parent, text='打开汉化修改包文件夹', command=lambda: self.open_mods_folder())
         self.mods_button.grid(row=6, column=2, columnspan=2)
 
         # 第六行：安装路径选择/下载进度
-        self.install_path_entry = tk.Entry(parent, textvariable=self.mo_path, width=20)
-        self.install_path_button = tk.Button(parent, text='选择文件', command=self.choose_mo)
-        self.download_progress_label = tk.Label(parent, text='下载进度：')
-        self.download_progress_info = tk.Label(parent, textvariable=self.download_info)
+        self.install_path_entry = ttk.Entry(parent, textvariable=self.mo_path, width=20)
+        self.install_path_button = ttk.Button(parent, text='选择文件', command=self.choose_mo)
+        self.download_progress_label = ttk.Label(parent, text='下载进度：')
+        self.download_progress_info = ttk.Label(parent, textvariable=self.download_info)
 
         # 第七行：安装/更新按钮
-        self.install_button = tk.Button(parent, text='安装或更新', command=self.install_update)
+        self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update, style=ttk.SUCCESS)
         self.install_button.grid(row=7, column=0)
 
         # 安装进度
         tk.Label(parent, textvariable=self.install_progress).grid(row=7, column=1, columnspan=2, sticky=tk.W)
 
         # 第八行：启动游戏
-        self.launch_button = tk.Button(parent, text='启动客户端', command=launch_game)
+        self.launch_button = ttk.Button(parent, text='启动游戏', command=launch_game, style=ttk.WARNING)
         self.launch_button.grid(row=8, column=0)
 
         # 启动器状态
-        tk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=2, sticky=tk.W)
+        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=2, sticky=tk.W)
 
-        tk.Label(parent, text='Copyright © 2024 LocalizedKorabli').grid(row=9, column=0, columnspan=4, sticky='ew')
+        ttk.Label(parent, text='Copyright © 2024 LocalizedKorabli').grid(row=9, column=0, columnspan=4)
 
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
@@ -405,7 +400,7 @@ class LocalizationInstaller:
                     self.human_readable_version = '.'.join(full_version.split('.')[:-1])
                     return
             self.human_readable_version = '未知'
-        self.human_readable_version = '未在运行目录下找到战舰世界客户端！'
+        self.human_readable_version = '未找到战舰世界客户端！'
 
     def get_local_l10n_version(self) -> str:
         info_file = Path('bin').joinpath(self.get_run_dir()).joinpath('l10n').joinpath('version.info')
@@ -429,13 +424,13 @@ class LocalizationInstaller:
 
     def toggle_install_path(self, *args):
         if self.download_source.get() == 'local':
-            self.install_path_entry.grid(row=4, column=0, columnspan=3, pady=12)
+            self.install_path_entry.grid(row=4, column=0, columnspan=3)
             self.install_path_button.grid(row=4, column=3)
             self.download_progress_label.grid_forget()
             self.download_progress_info.grid_forget()
         else:
-            self.download_progress_label.grid(row=4, column=0, pady=11, sticky=tk.W)
-            self.download_progress_info.grid(row=4, column=1, pady=11, columnspan=2, sticky=tk.W)
+            self.download_progress_label.grid(row=4, column=0, pady=5, sticky=tk.W)
+            self.download_progress_info.grid(row=4, column=1, pady=5, columnspan=2, sticky=tk.W)
             self.install_path_entry.grid_forget()
             self.install_path_button.grid_forget()
 
@@ -485,7 +480,11 @@ def find_launcher() -> str:
 
 
 if __name__ == '__main__':
-    root = tk.Tk()
+    root = ttk.Window(iconphoto=None)
+    root.iconbitmap(os.path.join(resource_path, 'icon.ico'))
+    half_screen_width = int(root.winfo_screenwidth() / 2) - 150
+    half_screen_height = int(root.winfo_screenheight() / 2) - 150
+    root.geometry(f'+{half_screen_width}+{half_screen_height}')
     app = LocalizationInstaller(root)
     root.mainloop()
 
