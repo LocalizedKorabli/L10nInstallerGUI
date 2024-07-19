@@ -15,7 +15,6 @@ import os
 import shutil
 import subprocess
 import sys
-import threading
 import time
 import tkinter as tk
 import urllib.request
@@ -36,7 +35,7 @@ import ttkbootstrap as ttk
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.1-rc1'
+version = '0.0.1-rc2'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -94,7 +93,7 @@ class LocalizationInstaller:
     mod_selection: tk.BooleanVar
     mo_path: tk.StringVar
     install_progress: tk.StringVar
-    download_info: tk.StringVar
+    download_progress: tk.StringVar
 
     # Variables
     choice: Dict[str, Any] = None
@@ -110,7 +109,7 @@ class LocalizationInstaller:
         mkdir('l10n_installer/processed')
         mkdir('l10n_installer/settings')
         self.root = parent
-        self.root.title(f'汉化安装器-v{version}')
+        self.root.title(f'汉化安装器v{version}')
 
         self.game_version = tk.StringVar()
         self.localization_status = tk.StringVar()
@@ -121,7 +120,7 @@ class LocalizationInstaller:
         self.mo_path = tk.StringVar()
         self.install_progress = tk.StringVar()
         self.game_launcher_status = tk.StringVar()
-        self.download_info = tk.StringVar()
+        self.download_progress = tk.StringVar()
 
         # 第一行：游戏版本
         ttk.Label(parent, textvariable=self.game_version) \
@@ -164,7 +163,7 @@ class LocalizationInstaller:
         self.install_path_entry = ttk.Entry(parent, textvariable=self.mo_path, width=20)
         self.install_path_button = ttk.Button(parent, text='选择文件', command=self.choose_mo)
         self.download_progress_label = ttk.Label(parent, text='下载进度：')
-        self.download_progress_info = ttk.Label(parent, textvariable=self.download_info)
+        self.download_progress_info = ttk.Label(parent, textvariable=self.download_progress)
 
         # 第七行：安装/更新按钮
         self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update, style=ttk.SUCCESS)
@@ -204,7 +203,7 @@ class LocalizationInstaller:
         self.ee_selection.set(choice.get('use_ee', True))
         self.mod_selection.set(choice.get('apply_mods', True))
 
-        self.download_info.set('准备')
+        self.download_progress.set('准备')
         self.install_progress.set('安装进度：' + '等待中')
         self.game_launcher_status.set(find_launcher())
 
@@ -235,8 +234,7 @@ class LocalizationInstaller:
             return
         self.is_installing = True
         self.save_choice()
-        thread = threading.Thread(target=self.do_install_update())
-        thread.start()
+        self.do_install_update()
 
     def do_install_update(self):
         run_dir = self.get_run_dir()
@@ -265,24 +263,24 @@ class LocalizationInstaller:
             if self.ee_selection.get():
                 self.install_progress.set('安装体验增强包')
                 output_file = 'l10n_installer/downloads/LK_EE.zip'
-                self.download_info.set('下载体验增强包——连接中')
+                self.download_progress.set('下载体验增强包——连接中')
                 ee_ready = False
                 try:
                     response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
                                             '/BuiltInMods/LKExperienceEnhancement.zip', stream=True, proxies=proxies)
                     status = response.status_code
                     if status == 200:
-                        self.download_info.set('下载体验增强包——下载中')
+                        self.download_progress.set('下载体验增强包——下载中')
                         with open(output_file, 'wb') as f:
                             for chunk in response.iter_content(chunk_size=1024):
                                 if chunk:
                                     f.write(chunk)
                         ee_ready = True
-                        self.download_info.set('下载体验增强包——完成')
+                        self.download_progress.set('下载体验增强包——完成')
                     else:
-                        self.download_info.set(f'下载体验增强包——失败（{status}）')
+                        self.download_progress.set(f'下载体验增强包——失败（{status}）')
                 except requests.exceptions.RequestException:
-                    self.download_info.set('下载体验增强包——请求异常')
+                    self.download_progress.set('下载体验增强包——请求异常')
                 if ee_ready:
                     with zipfile.ZipFile(output_file, 'r') as ee_zip:
                         ee_zip.extractall(target_path)
@@ -296,7 +294,7 @@ class LocalizationInstaller:
         # remote_version = ''
         # downloaded_mo = ''
         if download_src != 'local':
-            self.download_info.set('下载汉化包')
+            self.download_progress.set('下载汉化包')
             download_link_base = download_routes['r' if is_release else 'pt'][download_src]['url']
             # Check and Fetch
             downloaded: Tuple = self.check_version_and_fetch_mo(download_link_base, proxies)
@@ -306,10 +304,10 @@ class LocalizationInstaller:
             downloaded_mo = self.mo_path.get()
             remote_version = 'local'
         if not downloaded_mo.endswith('.mo') or not os.path.isfile(downloaded_mo):
-            self.download_info.set('下载汉化包——文件异常')
+            self.download_progress.set('下载汉化包——文件异常')
             nothing_wrong = False
         if nothing_wrong:
-            self.download_info.set('下载汉化包——完成')
+            self.download_progress.set('下载汉化包——完成')
             mods = self.get_mods()
             downloaded_mo = self.parse_and_apply_mods(downloaded_mo, mods)
             if downloaded_mo == '':
@@ -340,7 +338,7 @@ class LocalizationInstaller:
 
     def check_version_and_fetch_mo(self, download_link_base: str, proxies: Dict) -> (str, str):
         remote_version: str = 'latest'
-        self.download_info.set('下载汉化包——获取版本')
+        self.download_progress.set('下载汉化包——获取版本')
         try:
             response = requests.get(download_link_base + 'version.info', stream=True, proxies=proxies)
             status = response.status_code
@@ -352,12 +350,12 @@ class LocalizationInstaller:
                             f.write(chunk)
                 with open(info_file, 'r', encoding='utf-8') as f:
                     remote_version = f.readline()
-                    self.download_info.set(f'下载汉化包——最新版本为{remote_version}')
+                    self.download_progress.set(f'下载汉化包——最新版本为{remote_version}')
         except requests.exceptions.RequestException:
             pass
         valid_version = remote_version != 'latest'
         if not valid_version:
-            self.download_info.set(f'下载汉化包——版本获取失败')
+            self.download_progress.set(f'下载汉化包——版本获取失败')
         mo_file_name = f'{remote_version}.mo'
         output_file = f'l10n_installer/downloads/{mo_file_name}'
         # Check existed
@@ -365,7 +363,7 @@ class LocalizationInstaller:
             if os.path.isfile(output_file):
                 try:
                     if polib.mofile(output_file):
-                        self.download_info.set(f'下载汉化包——使用已下载文件')
+                        self.download_progress.set(f'下载汉化包——使用已下载文件')
                         return output_file, remote_version
                 except Exception:
                     pass
