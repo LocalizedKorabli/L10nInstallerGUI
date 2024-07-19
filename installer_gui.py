@@ -31,7 +31,9 @@ from typing import Any, Dict, List, Tuple
 import polib
 import requests
 
-version = '2024.07.18.2350'
+# import ttkbootstrap
+
+version = '0.0.1'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -96,7 +98,7 @@ class LocalizationInstaller:
         mkdir('l10n_installer/mods')
         mkdir('l10n_installer/processed')
         self.root = parent
-        self.root.title(f'LocalizedKorabli汉化安装器-v{version}')
+        self.root.title(f'汉化安装器-v{version}')
         half_screen_width = int(self.root.winfo_screenwidth() / 2) - 150
         half_screen_height = int(self.root.winfo_screenheight() / 2) - 150
         self.root.geometry(f'+{half_screen_width}+{half_screen_height}')
@@ -128,7 +130,7 @@ class LocalizationInstaller:
         # 游戏类型选项
         ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True) \
             .grid(row=2, column=1, sticky=tk.W)
-        ttk.Radiobutton(parent, text='测试（PT）服', variable=self.is_release, value=False) \
+        ttk.Radiobutton(parent, text='PT服', variable=self.is_release, value=False) \
             .grid(row=2, column=2, sticky=tk.W)
 
         # 第四行：下载源
@@ -145,27 +147,31 @@ class LocalizationInstaller:
         ttk.Checkbutton(parent, text='安装体验增强包', variable=self.builtin_mods_selection) \
             .grid(row=5, column=0, columnspan=2, sticky=tk.W)
         ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
-            .grid(row=5, column=2, columnspan=2, sticky=tk.W)
+            .grid(row=6, column=0, columnspan=2, sticky=tk.W)
+        self.mods_button = tk.Button(parent, text='打开汉化修改包文件夹', command=lambda: self.open_mods_folder())
+        self.mods_button.grid(row=6, column=2, columnspan=2)
 
         # 第六行：安装路径选择/下载进度
-        self.install_path_entry = tk.Entry(parent, textvariable=self.mo_path, width=30)
+        self.install_path_entry = tk.Entry(parent, textvariable=self.mo_path, width=20)
         self.install_path_button = tk.Button(parent, text='选择文件', command=self.choose_mo)
         self.download_progress_label = tk.Label(parent, text='下载进度：')
         self.download_progress_info = tk.Label(parent, textvariable=self.download_info)
 
         # 第七行：安装/更新按钮
         self.install_button = tk.Button(parent, text='安装或更新', command=self.install_update)
-        self.install_button.grid(row=6, column=0)
+        self.install_button.grid(row=7, column=0)
 
         # 安装进度
-        tk.Label(parent, textvariable=self.install_progress).grid(row=6, column=1, sticky=tk.W)
+        tk.Label(parent, textvariable=self.install_progress).grid(row=7, column=1, columnspan=2, sticky=tk.W)
 
         # 第八行：启动游戏
         self.launch_button = tk.Button(parent, text='启动客户端', command=launch_game)
-        self.launch_button.grid(row=7, column=0)
+        self.launch_button.grid(row=8, column=0)
 
         # 启动器状态
-        tk.Label(parent, textvariable=self.game_launcher_status).grid(row=7, column=1, sticky=tk.W)
+        tk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=2, sticky=tk.W)
+
+        tk.Label(parent, text='Copyright © 2024 LocalizedKorabli').grid(row=9, column=0, columnspan=4, sticky='ew')
 
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
@@ -177,6 +183,11 @@ class LocalizationInstaller:
         self.download_info.set('准备')
         self.install_progress.set('安装进度：' + '等待中')
         self.game_launcher_status.set(find_launcher())
+
+    def open_mods_folder(self):
+        mods_folder = Path('l10n_installer/mods')
+        mkdir(mods_folder)
+        subprocess.run(['explorer', mods_folder.absolute()])
 
     def choose_mo(self):
         mo_path = filedialog.askopenfilename(initialdir='.', filetypes=[('MO文件', '*.mo')])
@@ -424,7 +435,7 @@ class LocalizationInstaller:
             self.download_progress_info.grid_forget()
         else:
             self.download_progress_label.grid(row=4, column=0, pady=11, sticky=tk.W)
-            self.download_progress_info.grid(row=4, column=1, pady=11, sticky=tk.W)
+            self.download_progress_info.grid(row=4, column=1, pady=11, columnspan=2, sticky=tk.W)
             self.install_path_entry.grid_forget()
             self.install_path_button.grid_forget()
 
