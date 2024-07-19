@@ -10,6 +10,7 @@
 #
 # You should have received a copy of the GNU General Public License along with this program. If not,
 # see <https://www.gnu.org/licenses/>.
+import json
 import os
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ import threading
 import time
 import tkinter as tk
 import urllib.request
+import webbrowser
 # pip install urllib3==1.25.11
 # The newer urllib has break changes.
 import xml.etree.ElementTree as ET
@@ -31,7 +33,10 @@ import polib
 import requests
 import ttkbootstrap as ttk
 
-version = '0.0.1'
+project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
+installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
+
+version = '0.0.1-rc1'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -68,6 +73,13 @@ download_routes = {
     }
 }
 
+choice_template = {
+    'is_release': True,
+    'download_source': 'gitee',
+    'use_ee': True,
+    'apply_mods': True
+}
+
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, 'resources')
 
@@ -78,13 +90,14 @@ class LocalizationInstaller:
     localization_status: tk.StringVar
     is_release: tk.BooleanVar
     download_source: tk.StringVar
-    builtin_mods_selection: tk.BooleanVar
+    ee_selection: tk.BooleanVar
     mod_selection: tk.BooleanVar
     mo_path: tk.StringVar
     install_progress: tk.StringVar
     download_info: tk.StringVar
 
     # Variables
+    choice: Dict[str, Any] = None
     human_readable_version: str = ''
     installed_l10n_version = ''
     run_dir: str = ''
@@ -95,6 +108,7 @@ class LocalizationInstaller:
         mkdir('l10n_installer/downloads')
         mkdir('l10n_installer/mods')
         mkdir('l10n_installer/processed')
+        mkdir('l10n_installer/settings')
         self.root = parent
         self.root.title(f'汉化安装器-v{version}')
 
@@ -102,7 +116,7 @@ class LocalizationInstaller:
         self.localization_status = tk.StringVar()
         self.is_release = tk.BooleanVar()
         self.download_source = tk.StringVar()
-        self.builtin_mods_selection = tk.BooleanVar()
+        self.ee_selection = tk.BooleanVar()
         self.mod_selection = tk.BooleanVar()
         self.mo_path = tk.StringVar()
         self.install_progress = tk.StringVar()
@@ -111,16 +125,16 @@ class LocalizationInstaller:
 
         # 第一行：游戏版本
         ttk.Label(parent, textvariable=self.game_version) \
-            .grid(row=0, column=0, columnspan=4, sticky=tk.W)
+            .grid(row=0, column=0, columnspan=4, pady=5, sticky=tk.W)
         self.game_version.set('游戏版本：' + self.get_human_readable_version())
 
         # 第二行：汉化状态
         ttk.Label(parent, textvariable=self.localization_status) \
-            .grid(row=1, column=0, columnspan=3, sticky=tk.W)
+            .grid(row=1, column=0, columnspan=3, pady=5, sticky=tk.W)
         self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
         # 第三行：游戏类型
-        ttk.Label(parent, text='游戏类型：').grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(parent, text='游戏类型：').grid(row=2, column=0, pady=5, sticky=tk.W)
 
         # 游戏类型选项
         ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True) \
@@ -129,7 +143,7 @@ class LocalizationInstaller:
             .grid(row=2, column=2, sticky=tk.W)
 
         # 第四行：下载源
-        ttk.Label(parent, text='汉化来源：').grid(row=3, column=0, sticky=tk.W)
+        ttk.Label(parent, text='汉化来源：').grid(row=3, column=0, pady=5, sticky=tk.W)
         # 下载源选项
         ttk.Radiobutton(parent, text='Gitee', variable=self.download_source, value='gitee') \
             .grid(row=3, column=1, sticky=tk.W)
@@ -139,10 +153,10 @@ class LocalizationInstaller:
             .grid(row=3, column=3, sticky=tk.W)
 
         # 第五行：体验增强包/汉化修改包
-        ttk.Checkbutton(parent, text='安装体验增强包', variable=self.builtin_mods_selection) \
-            .grid(row=5, column=0, columnspan=2, sticky=tk.W)
+        ttk.Checkbutton(parent, text='安装体验增强包', variable=self.ee_selection) \
+            .grid(row=5, column=0, columnspan=2, pady=5, sticky=tk.W)
         ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
-            .grid(row=6, column=0, columnspan=2, sticky=tk.W)
+            .grid(row=6, column=0, columnspan=2, pady=5, sticky=tk.W)
         self.mods_button = ttk.Button(parent, text='打开汉化修改包文件夹', command=lambda: self.open_mods_folder())
         self.mods_button.grid(row=6, column=2, columnspan=2)
 
@@ -154,30 +168,57 @@ class LocalizationInstaller:
 
         # 第七行：安装/更新按钮
         self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update, style=ttk.SUCCESS)
-        self.install_button.grid(row=7, column=0)
+        self.install_button.grid(row=7, column=0, pady=5)
 
         # 安装进度
-        tk.Label(parent, textvariable=self.install_progress).grid(row=7, column=1, columnspan=2, sticky=tk.W)
+        tk.Label(parent, textvariable=self.install_progress).grid(row=7, column=1, columnspan=2,
+                                                                  padx=5, sticky=tk.W)
 
         # 第八行：启动游戏
         self.launch_button = ttk.Button(parent, text='启动游戏', command=launch_game, style=ttk.WARNING)
-        self.launch_button.grid(row=8, column=0)
+        self.launch_button.grid(row=8, column=0, pady=5)
 
         # 启动器状态
-        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=2, sticky=tk.W)
+        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=2,
+                                                                       padx=5, sticky=tk.W)
 
-        ttk.Label(parent, text='Copyright © 2024 LocalizedKorabli').grid(row=9, column=0, columnspan=4)
+        # 相关链接
+        about_button = ttk.Button(parent, text='关于项目', command=lambda: webbrowser.open_new_tab(project_repo_link),
+                                  style=ttk.INFO)
+        about_button.grid(row=9, column=0, pady=5)
+
+        src_button = ttk.Button(parent, text='代码仓库', command=lambda: webbrowser.open_new_tab(installer_repo_link),
+                                style=ttk.DANGER)
+        src_button.grid(row=9, column=1, pady=5, padx=5)
+
+        # 版权声明
+        ttk.Label(parent, text='© 2024 LocalizedKorabli').grid(row=9, column=2, columnspan=3, pady=5)
 
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
 
-        self.builtin_mods_selection.set(True)
-        self.mod_selection.set(True)
-        self.is_release.set(True)
-        self.download_source.set('gitee')
+        choice = self.parse_choice()
+
+        self.is_release.set(choice.get('is_release', True))
+        self.download_source.set(choice.get('download_source', 'gitee'))
+        self.ee_selection.set(choice.get('use_ee', True))
+        self.mod_selection.set(choice.get('apply_mods', True))
+
         self.download_info.set('准备')
         self.install_progress.set('安装进度：' + '等待中')
         self.game_launcher_status.set(find_launcher())
+
+    def toggle_install_path(self, *args):
+        if self.download_source.get() == 'local':
+            self.install_path_entry.grid(row=4, column=0, columnspan=3)
+            self.install_path_button.grid(row=4, column=3)
+            self.download_progress_label.grid_forget()
+            self.download_progress_info.grid_forget()
+        else:
+            self.download_progress_label.grid(row=4, column=0, pady=5, sticky=tk.W)
+            self.download_progress_info.grid(row=4, column=1, pady=5, columnspan=2, sticky=tk.W)
+            self.install_path_entry.grid_forget()
+            self.install_path_button.grid_forget()
 
     def open_mods_folder(self):
         mods_folder = Path('l10n_installer/mods')
@@ -193,6 +234,7 @@ class LocalizationInstaller:
         if self.is_installing:
             return
         self.is_installing = True
+        self.save_choice()
         thread = threading.Thread(target=self.do_install_update())
         thread.start()
 
@@ -220,7 +262,7 @@ class LocalizationInstaller:
         proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
         if is_release:
             # EE
-            if self.builtin_mods_selection.get():
+            if self.ee_selection.get():
                 self.install_progress.set('安装体验增强包')
                 output_file = 'l10n_installer/downloads/LK_EE.zip'
                 self.download_info.set('下载体验增强包——连接中')
@@ -422,17 +464,29 @@ class LocalizationInstaller:
             except ValueError:
                 return f'未知，安装时间未知'
 
-    def toggle_install_path(self, *args):
-        if self.download_source.get() == 'local':
-            self.install_path_entry.grid(row=4, column=0, columnspan=3)
-            self.install_path_button.grid(row=4, column=3)
-            self.download_progress_label.grid_forget()
-            self.download_progress_info.grid_forget()
-        else:
-            self.download_progress_label.grid(row=4, column=0, pady=5, sticky=tk.W)
-            self.download_progress_info.grid(row=4, column=1, pady=5, columnspan=2, sticky=tk.W)
-            self.install_path_entry.grid_forget()
-            self.install_path_button.grid_forget()
+    def parse_choice(self) -> Dict[str, str]:
+        if self.choice:
+            return self.choice
+        choice_file = 'l10n_installer/settings/choice.json'
+        if os.path.isfile(choice_file):
+            try:
+                with open(choice_file, 'r', encoding='utf-8') as f:
+                    self.choice = json.load(f)
+                    return self.choice
+            except Exception:
+                pass
+        print('using default')
+        self.choice = choice_template.copy()
+        return self.choice
+
+    def save_choice(self) -> None:
+        if self.choice:
+            self.choice['is_release'] = self.is_release.get()
+            self.choice['download_source'] = self.download_source.get()
+            self.choice['use_ee'] = self.ee_selection.get()
+            self.choice['apply_mods'] = self.mod_selection.get()
+            with open('l10n_installer/settings/choice.json', 'w', encoding='utf-8') as f:
+                json.dump(self.choice, f, ensure_ascii=False, indent=4)
 
 
 def mkdir(t_dir: Any):
