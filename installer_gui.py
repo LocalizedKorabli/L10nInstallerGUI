@@ -36,7 +36,7 @@ import ttkbootstrap as ttk
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.2'
+version = '0.0.2a'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
