@@ -172,7 +172,7 @@ class LocalizationInstaller:
         self.download_progress_info = ttk.Label(parent, textvariable=self.download_progress_text)
 
         # 第七行：安装/更新按钮
-        self.install_button = ttk.Button(parent, text='安装汉化', command=lambda: self.install_update(parent),
+        self.install_button = ttk.Button(parent, text='安装汉化', command=lambda: self.install_update(),
                                          style=ttk.SUCCESS)
         self.install_button.grid(row=7, column=0, pady=5)
 
@@ -216,7 +216,7 @@ class LocalizationInstaller:
 
         self.safely_set_download_progress_text('准备')
         self.safely_set_install_progress_text('准备')
-        self.safely_set_install_progress(progress=100.0)
+        self.safely_set_install_progress(progress=0.0)
         self.game_launcher_status.set(find_launcher())
 
     def safely_set_download_progress_text(self, msg: str):
@@ -252,7 +252,7 @@ class LocalizationInstaller:
         if mo_path:
             self.mo_path.set(mo_path)
 
-    def install_update(self, parent: tk.Tk):
+    def install_update(self):
         if self.is_installing:
             return
         self.is_installing = True
@@ -261,6 +261,7 @@ class LocalizationInstaller:
         tr.start()
 
     def do_install_update(self):
+        self.safely_set_install_progress(progress=0.0)
         run_dir = self.get_run_dir()
         try:
             int(run_dir)
