@@ -27,7 +27,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import polib
 import requests
@@ -36,7 +36,7 @@ import ttkbootstrap as ttk
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.1'
+version = '0.0.2'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -85,7 +85,10 @@ resource_path: str = os.path.join(base_path, 'resources')
 
 
 class LocalizationInstaller:
-    # GUI Related
+    # Components
+    install_progress_bar: ttk.Progressbar
+
+    # GUI Related Variables
     game_version: tk.StringVar
     localization_status: tk.StringVar
     is_release: tk.BooleanVar
@@ -93,8 +96,9 @@ class LocalizationInstaller:
     ee_selection: tk.BooleanVar
     mod_selection: tk.BooleanVar
     mo_path: tk.StringVar
-    install_progress: tk.StringVar
-    download_progress: tk.StringVar
+    install_progress_text: tk.StringVar
+    download_progress_text: tk.StringVar
+    install_progress: tk.DoubleVar
 
     # Variables
     choice: Dict[str, Any] = None
@@ -119,9 +123,10 @@ class LocalizationInstaller:
         self.ee_selection = tk.BooleanVar()
         self.mod_selection = tk.BooleanVar()
         self.mo_path = tk.StringVar()
-        self.install_progress = tk.StringVar()
+        self.install_progress_text = tk.StringVar()
         self.game_launcher_status = tk.StringVar()
-        self.download_progress = tk.StringVar()
+        self.download_progress_text = tk.StringVar()
+        self.install_progress = tk.DoubleVar()
 
         # 第一行：游戏版本
         ttk.Label(parent, textvariable=self.game_version) \
@@ -164,35 +169,40 @@ class LocalizationInstaller:
         self.install_path_entry = ttk.Entry(parent, textvariable=self.mo_path, width=20)
         self.install_path_button = ttk.Button(parent, text='选择文件', command=self.choose_mo)
         self.download_progress_label = ttk.Label(parent, text='下载进度：')
-        self.download_progress_info = ttk.Label(parent, textvariable=self.download_progress)
+        self.download_progress_info = ttk.Label(parent, textvariable=self.download_progress_text)
 
         # 第七行：安装/更新按钮
-        self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update, style=ttk.SUCCESS)
+        self.install_button = ttk.Button(parent, text='安装汉化', command=lambda: self.install_update(parent),
+                                         style=ttk.SUCCESS)
         self.install_button.grid(row=7, column=0, pady=5)
 
         # 安装进度
-        tk.Label(parent, textvariable=self.install_progress).grid(row=7, column=1, columnspan=3,
-                                                                  padx=5, sticky=tk.W)
+        ttk.Label(parent, textvariable=self.install_progress_text).grid(row=7, column=1, columnspan=3,
+                                                                        padx=5, sticky=tk.W)
+
+        self.install_progress_bar = ttk.Progressbar(parent, variable=self.install_progress, maximum=100.0,
+                                                    style='success-striped', length=400)
+        self.install_progress_bar.grid(row=8, column=0, columnspan=4, padx=10)
 
         # 第八行：启动游戏
         self.launch_button = ttk.Button(parent, text='启动游戏', command=launch_game, style=ttk.WARNING)
-        self.launch_button.grid(row=8, column=0, pady=5)
+        self.launch_button.grid(row=9, column=0, pady=5)
 
         # 启动器状态
-        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=8, column=1, columnspan=3,
+        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=9, column=1, columnspan=3,
                                                                        padx=5, sticky=tk.W)
 
         # 相关链接
         about_button = ttk.Button(parent, text='关于项目', command=lambda: webbrowser.open_new_tab(project_repo_link),
                                   style=ttk.INFO)
-        about_button.grid(row=9, column=0, pady=5)
+        about_button.grid(row=10, column=0, pady=5)
 
         src_button = ttk.Button(parent, text='代码仓库', command=lambda: webbrowser.open_new_tab(installer_repo_link),
                                 style=ttk.DANGER)
-        src_button.grid(row=9, column=1, pady=5, padx=5)
+        src_button.grid(row=10, column=1, pady=5, padx=5)
 
         # 版权声明
-        ttk.Label(parent, text='© 2024 LocalizedKorabli').grid(row=9, column=2, columnspan=3, pady=5)
+        ttk.Label(parent, text='© 2024 LocalizedKorabli').grid(row=10, column=2, columnspan=3, pady=5)
 
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
@@ -204,15 +214,19 @@ class LocalizationInstaller:
         self.ee_selection.set(choice.get('use_ee', True))
         self.mod_selection.set(choice.get('apply_mods', True))
 
-        self.safely_set_download_progress('准备')
-        self.safely_set_install_progress('准备')
+        self.safely_set_download_progress_text('准备')
+        self.safely_set_install_progress_text('准备')
+        self.safely_set_install_progress(progress=100.0)
         self.game_launcher_status.set(find_launcher())
 
-    def safely_set_download_progress(self, msg: str):
-        self.root.after(0, self.download_progress.set(msg))
+    def safely_set_download_progress_text(self, msg: str):
+        self.root.after(0, self.download_progress_text.set(msg))
 
-    def safely_set_install_progress(self, msg: str):
-        self.root.after(0, self.install_progress.set('进度：' + msg))
+    def safely_set_install_progress_text(self, msg: str):
+        self.root.after(0, self.install_progress_text.set('进度：' + msg))
+
+    def safely_set_install_progress(self, progress: Optional[float] = None):
+        self.root.after(0, self.install_progress.set(progress))
 
     def toggle_install_path(self, *args):
         if self.download_source.get() == 'local':
@@ -232,17 +246,18 @@ class LocalizationInstaller:
         subprocess.run(['explorer', mods_folder.absolute()])
 
     def choose_mo(self):
-        mo_path = filedialog.askopenfilename(initialdir='.', filetypes=[('MO文件', '*.mo')])
+        mo_path = filedialog.askopenfilename(initialdir='.', filetypes=[('汉化包', ['*.mo', '*.zip']),
+                                                                        ('MO汉化文件', '*.mo'),
+                                                                        ('打包的汉化文件', '*.zip')])
         if mo_path:
             self.mo_path.set(mo_path)
 
-    def install_update(self):
+    def install_update(self, parent: tk.Tk):
         if self.is_installing:
             return
         self.is_installing = True
         self.save_choice()
         tr = threading.Thread(target=lambda: self.do_install_update())
-        # self.do_install_update()
         tr.start()
 
     def do_install_update(self):
@@ -254,7 +269,7 @@ class LocalizationInstaller:
         is_release = self.is_release.get()
         target_path = Path('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
         mkdir(target_path)
-        self.safely_set_install_progress('安装locale_config')
+        self.safely_set_install_progress_text('安装locale_config')
         if not is_release:
             old_cfg = target_path.joinpath('locale_config.xml')
             old_cfg_backup = target_path.joinpath('locale_config.xml.old')
@@ -265,65 +280,89 @@ class LocalizationInstaller:
         else:
             with open(target_path.joinpath('locale_config.xml'), 'w', encoding='utf-8') as file:
                 file.write(locale_config)
-        self.safely_set_install_progress('安装locale_config——完成')
+        self.safely_set_install_progress_text('安装locale_config——完成')
+        self.safely_set_install_progress(progress=20.0)
         proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
         if is_release:
             # EE
             if self.ee_selection.get():
-                self.safely_set_install_progress('安装体验增强包')
+                self.safely_set_install_progress_text('安装体验增强包')
                 output_file = 'l10n_installer/downloads/LK_EE.zip'
-                self.safely_set_download_progress('下载体验增强包——连接中')
+                self.safely_set_download_progress_text('下载体验增强包——连接中')
                 ee_ready = False
                 try:
                     response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
                                             '/BuiltInMods/LKExperienceEnhancement.zip', stream=True, proxies=proxies)
                     status = response.status_code
                     if status == 200:
-                        self.safely_set_download_progress('下载体验增强包——下载中')
+                        self.safely_set_download_progress_text('下载体验增强包——下载中')
                         with open(output_file, 'wb') as f:
                             for chunk in response.iter_content(chunk_size=1024):
                                 if chunk:
                                     f.write(chunk)
                         ee_ready = True
-                        self.safely_set_download_progress('下载体验增强包——完成')
+                        self.safely_set_download_progress_text('下载体验增强包——完成')
                     else:
-                        self.safely_set_download_progress(f'下载体验增强包——失败（{status}）')
+                        self.safely_set_download_progress_text(f'下载体验增强包——失败（{status}）')
                 except requests.exceptions.RequestException:
-                    self.safely_set_download_progress('下载体验增强包——请求异常')
+                    self.safely_set_download_progress_text('下载体验增强包——请求异常')
                 if ee_ready:
-                    with zipfile.ZipFile(output_file, 'r') as ee_zip:
-                        ee_zip.extractall(target_path)
-                    self.safely_set_install_progress('安装体验增强包——完成')
+                    with zipfile.ZipFile(output_file, 'r') as mo_zip:
+                        mo_zip.extractall(target_path)
+                    self.safely_set_install_progress_text('安装体验增强包——完成')
                 else:
-                    self.safely_set_install_progress('安装体验增强包——失败')
+                    self.safely_set_install_progress_text('安装体验增强包——失败')
         # 汉化包
-        self.safely_set_install_progress('安装汉化包')
+        self.safely_set_install_progress(progress=30.0)
+        self.safely_set_install_progress_text('安装汉化包')
         download_src = self.download_source.get()
         nothing_wrong = True
         # remote_version = ''
         # downloaded_mo = ''
-        if download_src != 'local':
-            self.safely_set_download_progress('下载汉化包')
+        local_src = download_src == 'local'
+        if not local_src:
+            self.safely_set_download_progress_text('下载汉化包')
             download_link_base = download_routes['r' if is_release else 'pt'][download_src]['url']
             # Check and Fetch
             downloaded: Tuple = self.check_version_and_fetch_mo(download_link_base, proxies)
-            downloaded_mo = downloaded[0]
+            downloaded_file = downloaded[0]
             remote_version = downloaded[1]
         else:
-            downloaded_mo = self.mo_path.get()
+            downloaded_file = self.mo_path.get()
             remote_version = 'local'
-        if not downloaded_mo.endswith('.mo') or not os.path.isfile(downloaded_mo):
-            self.safely_set_download_progress('下载汉化包——文件异常')
+        info_path = Path('bin').joinpath(run_dir).joinpath('l10n')
+        mkdir(info_path)
+        info_file = info_path.joinpath('version.info')
+        if downloaded_file.endswith('.zip'):
+            extracted_path = Path('l10n_installer').joinpath('downloads').joinpath('extracted_mo')
+            mkdir(extracted_path)
+            info_fetched = False
+            with zipfile.ZipFile(downloaded_file, 'r') as mo_zip:
+                info_files = [info for info in mo_zip.filelist if info.filename.split('/')[-1] == 'version.info']
+                if info_files:
+                    info_file_name = info_files[0].filename
+                    mo_zip.extract(info_file_name, info_path)
+                    info_fetched = True
+                mo_files = [mo for mo in mo_zip.filelist if mo.filename.endswith('.mo')]
+                if mo_files:
+                    mo_file_name = mo_files[0].filename
+                    mo_zip.extract(mo_file_name, extracted_path)
+                    downloaded_file = os.path.join(extracted_path, mo_file_name)
+            if info_fetched and info_file.is_file():
+                with open(info_file, 'r', encoding='utf-8') as f:
+                    remote_version = f.readline()
+        if not downloaded_file.endswith('.mo') or not os.path.isfile(downloaded_file):
+            self.safely_set_install_progress_text('安装汉化包——文件异常')
             nothing_wrong = False
         if nothing_wrong:
-            self.safely_set_download_progress('下载汉化包——完成')
+            self.safely_set_download_progress_text('下载汉化包——完成')
             mods = self.get_mods()
-            downloaded_mo = self.parse_and_apply_mods(downloaded_mo, mods)
-            if downloaded_mo == '':
-                self.safely_set_install_progress('安装汉化包——文件损坏')
+            downloaded_file = self.parse_and_apply_mods(downloaded_file, mods)
+            if downloaded_file == '':
+                self.safely_set_install_progress_text('安装汉化包——文件损坏')
                 nothing_wrong = False
         if nothing_wrong:
-            self.safely_set_install_progress('安装汉化包——正在移动文件')
+            self.safely_set_install_progress_text('安装汉化包——正在移动文件')
             mo_dir = target_path.joinpath('texts').joinpath('ru').joinpath('LC_MESSAGES')
             mkdir(mo_dir)
             old_mo = mo_dir.joinpath('global.mo')
@@ -331,10 +370,7 @@ class LocalizationInstaller:
             if not is_release:
                 if not os.path.isfile(old_mo_backup) and os.path.isfile(old_mo):
                     shutil.copy(old_mo, old_mo_backup)
-            shutil.copy(downloaded_mo, old_mo)
-            info_path = Path('bin').joinpath(run_dir).joinpath('l10n')
-            mkdir(info_path)
-            info_file = info_path.joinpath('version.info')
+            shutil.copy(downloaded_file, old_mo)
             with open(info_file, 'w', encoding='utf-8') as f:
                 f.write(remote_version)
                 try:
@@ -342,12 +378,14 @@ class LocalizationInstaller:
                 except ValueError:
                     f.write(f'\n{time.time()}')
         self.is_installing = False
-        self.safely_set_install_progress('完成！' if nothing_wrong else '失败！')
+        if nothing_wrong:
+            self.safely_set_install_progress(progress=100.0)
+        self.safely_set_install_progress_text('完成！' if nothing_wrong else '失败！')
         self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
     def check_version_and_fetch_mo(self, download_link_base: str, proxies: Dict) -> (str, str):
         remote_version: str = 'latest'
-        self.safely_set_download_progress('下载汉化包——获取版本')
+        self.safely_set_download_progress_text('下载汉化包——获取版本')
         try:
             response = requests.get(download_link_base + 'version.info', stream=True, proxies=proxies)
             status = response.status_code
@@ -359,12 +397,12 @@ class LocalizationInstaller:
                             f.write(chunk)
                 with open(info_file, 'r', encoding='utf-8') as f:
                     remote_version = f.readline()
-                    self.safely_set_download_progress(f'下载汉化包——最新={remote_version}')
+                    self.safely_set_download_progress_text(f'下载汉化包——最新={remote_version}')
         except requests.exceptions.RequestException:
             pass
         valid_version = remote_version != 'latest'
         if not valid_version:
-            self.safely_set_download_progress(f'下载汉化包——版本获取失败')
+            self.safely_set_download_progress_text(f'下载汉化包——版本获取失败')
         mo_file_name = f'{remote_version}.mo'
         output_file = f'l10n_installer/downloads/{mo_file_name}'
         # Check existed
@@ -372,7 +410,7 @@ class LocalizationInstaller:
             if os.path.isfile(output_file):
                 try:
                     if polib.mofile(output_file):
-                        self.safely_set_download_progress(f'下载汉化包——使用已下载文件')
+                        self.safely_set_download_progress_text(f'下载汉化包——使用已下载文件')
                         return output_file, remote_version
                 except Exception:
                     pass
@@ -406,7 +444,7 @@ class LocalizationInstaller:
             return ''
         if len(mods) == 0:
             return downloaded_mo
-        self.safely_set_install_progress('安装汉化包——正在应用模组')
+        self.safely_set_install_progress_text('安装汉化包——正在应用模组')
         for mod in mods:
             try:
                 process_modification_file(downloaded_mo_instance, mod)
@@ -537,8 +575,8 @@ def find_launcher() -> str:
 if __name__ == '__main__':
     root = ttk.Window(iconphoto=None)
     root.iconbitmap(os.path.join(resource_path, 'icon.ico'))
-    half_screen_width = int(root.winfo_screenwidth() / 2) - 150
-    half_screen_height = int(root.winfo_screenheight() / 2) - 150
+    half_screen_width = int(root.winfo_screenwidth() / 2) - 200
+    half_screen_height = int(root.winfo_screenheight() / 2) - 300
     root.geometry(f'+{half_screen_width}+{half_screen_height}')
     app = LocalizationInstaller(root)
     root.mainloop()
