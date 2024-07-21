@@ -443,14 +443,19 @@ class LocalizationInstaller:
             downloaded_mo_instance = polib.mofile(downloaded_mo)
         except Exception:
             return ''
-        if len(mods) == 0:
+        mods_count = len(mods)
+        if mods_count == 0:
+            self.safely_set_install_progress(90.0)
             return downloaded_mo
         self.safely_set_install_progress_text('安装汉化包——正在应用模组')
+        applied_mods = 0
         for mod in mods:
             try:
                 process_modification_file(downloaded_mo_instance, mod)
             except Exception:
                 pass
+            applied_mods += 1
+            self.safely_set_install_progress(30.0 + 60.0 * applied_mods / mods_count)
         for file in os.listdir('l10n_installer/processed/'):
             try:
                 os.remove(file)
