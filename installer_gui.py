@@ -36,7 +36,7 @@ import ttkbootstrap as ttk
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.2a'
+version = '0.0.2rc1'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -486,9 +486,9 @@ class LocalizationInstaller:
     def parse_game_version(self) -> None:
         if os.path.isfile('game_info.xml'):
             game_info = ET.parse('game_info.xml')
-            for version in game_info.findall('.//version'):
-                if version.get('name') == 'locale':
-                    full_version = str(version.get('installed'))
+            for part_version in game_info.findall('.//version'):
+                if part_version.get('name') == 'client':
+                    full_version = str(part_version.get('installed'))
                     self.run_dir = full_version.split('.')[-1]
                     self.human_readable_version = '.'.join(full_version.split('.')[:-1])
                     return
