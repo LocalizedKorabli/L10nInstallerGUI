@@ -33,10 +33,11 @@ import polib
 import requests
 import ttkbootstrap as ttk
 
+mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.2rc1'
+version = '0.0.2rc2'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -71,13 +72,6 @@ download_routes = {
             'direct': False
         }
     }
-}
-
-choice_template = {
-    'is_release': True,
-    'download_source': 'gitee',
-    'use_ee': True,
-    'apply_mods': True
 }
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
@@ -147,6 +141,9 @@ class LocalizationInstaller:
         ttk.Radiobutton(parent, text='PT服', variable=self.is_release, value=False) \
             .grid(row=2, column=2, sticky=tk.W)
 
+        self.detect_game_type_button = ttk.Button(parent, text='自动检测', command=self.detect_game_type())
+        self.detect_game_type_button.grid(row=2, column=3)
+
         # 第四行：下载源
         ttk.Label(parent, text='汉化来源：').grid(row=3, column=0, pady=5, sticky=tk.W)
         # 下载源选项
@@ -160,10 +157,13 @@ class LocalizationInstaller:
         # 第五行：体验增强包/汉化修改包
         ttk.Checkbutton(parent, text='安装体验增强包', variable=self.ee_selection) \
             .grid(row=5, column=0, columnspan=2, pady=5, sticky=tk.W)
-        ttk.Checkbutton(parent, text='安装汉化修改包', variable=self.mod_selection) \
+        ttk.Checkbutton(parent, text='安装模组（汉化修改包）', variable=self.mod_selection) \
             .grid(row=6, column=0, columnspan=2, pady=5, sticky=tk.W)
-        self.mods_button = ttk.Button(parent, text='打开汉化修改包文件夹', command=lambda: self.open_mods_folder())
-        self.mods_button.grid(row=6, column=2, columnspan=2)
+        self.mods_button = ttk.Button(parent, text='模组目录', command=lambda: self.open_mods_folder())
+        self.mods_button.grid(row=6, column=2, columnspan=1)
+        self.download_mods_button = ttk.Button(parent, text='下载模组',
+                                               command=lambda: webbrowser.open_new_tab(mods_link))
+        self.download_mods_button.grid(row=6, column=3, columnspan=1)
 
         # 第六行：安装路径选择/下载进度
         self.install_path_entry = ttk.Entry(parent, textvariable=self.mo_path, width=20)
@@ -241,7 +241,7 @@ class LocalizationInstaller:
             self.install_path_button.grid_forget()
 
     def open_mods_folder(self):
-        mods_folder = Path('l10n_installer/mods')
+        mods_folder = Path('l10n_installer').joinpath('mods')
         mkdir(mods_folder)
         subprocess.run(['explorer', mods_folder.absolute()])
 
@@ -495,6 +495,24 @@ class LocalizationInstaller:
             self.human_readable_version = '未知'
         self.human_readable_version = '未找到战舰世界客户端！'
 
+    def get_choice_template(self):
+        self.detect_game_type()
+        return {
+            'is_release': self.is_release,
+            'download_source': 'gitee',
+            'use_ee': True,
+            'apply_mods': True
+        }
+
+    def detect_game_type(self):
+        if not os.path.isfile('game_info.xml'):
+            return
+        game_info = ET.parse('game_info.xml')
+        game_id = game_info.find(".//protocol/game/id")
+        if not game_id:
+            return
+        self.is_release.set('RPT.PRODUCTION' not in game_id.text)
+
     def get_local_l10n_version(self) -> str:
         info_file = Path('bin').joinpath(self.get_run_dir()).joinpath('l10n').joinpath('version.info')
         if not os.path.isfile(info_file):
@@ -526,7 +544,7 @@ class LocalizationInstaller:
                     return self.choice
             except Exception:
                 pass
-        self.choice = choice_template.copy()
+        self.choice = self.get_choice_template()
         return self.choice
 
     def save_choice(self) -> None:
