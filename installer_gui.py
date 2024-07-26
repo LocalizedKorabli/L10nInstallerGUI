@@ -37,7 +37,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.2rc2'
+version = '0.0.2rc3'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -498,7 +498,7 @@ class LocalizationInstaller:
     def get_choice_template(self):
         self.detect_game_type()
         return {
-            'is_release': self.is_release,
+            'is_release': self.is_release.get(),
             'download_source': 'gitee',
             'use_ee': True,
             'apply_mods': True
