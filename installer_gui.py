@@ -37,7 +37,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.2rc3'
+version = '0.0.2r'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -74,6 +74,14 @@ download_routes = {
     }
 }
 
+server_regions_dict: Dict[str, Tuple[str, bool]] = {
+    'WOWS.RU.PRODUCTION': ('ru', True),
+    'WOWS.RPT.PRODUCTION': ('ru', False),
+    'WOWS.WW.PRODUCTION': ('zh_sg', True),
+    'WOWS.PT.PRODUCTION': ('zh_sg', False),
+    'WOWS.CN.PRODUCTION': ('zh_cn', True)
+}
+
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, 'resources')
 
@@ -85,6 +93,7 @@ class LocalizationInstaller:
     # GUI Related Variables
     game_version: tk.StringVar
     localization_status: tk.StringVar
+    server_region: tk.StringVar
     is_release: tk.BooleanVar
     download_source: tk.StringVar
     ee_selection: tk.BooleanVar
@@ -100,6 +109,7 @@ class LocalizationInstaller:
     installed_l10n_version = ''
     run_dir: str = ''
     is_installing: bool = False
+    game_launcher_file: str = ''
 
     def __init__(self, parent: tk.Tk):
         mkdir('l10n_installer/cache')
@@ -112,6 +122,7 @@ class LocalizationInstaller:
 
         self.game_version = tk.StringVar()
         self.localization_status = tk.StringVar()
+        self.server_region = tk.StringVar()
         self.is_release = tk.BooleanVar()
         self.download_source = tk.StringVar()
         self.ee_selection = tk.BooleanVar()
@@ -122,93 +133,106 @@ class LocalizationInstaller:
         self.download_progress_text = tk.StringVar()
         self.install_progress = tk.DoubleVar()
 
-        # 第一行：游戏版本
+        # 游戏版本
         ttk.Label(parent, textvariable=self.game_version) \
             .grid(row=0, column=0, columnspan=4, pady=5, sticky=tk.W)
         self.game_version.set('游戏版本：' + self.get_human_readable_version())
 
-        # 第二行：汉化状态
+        # 汉化状态
         ttk.Label(parent, textvariable=self.localization_status) \
             .grid(row=1, column=0, columnspan=4, pady=5, sticky=tk.W)
         self.localization_status.set('汉化版本：' + self.get_local_l10n_version())
 
-        # 第三行：游戏类型
-        ttk.Label(parent, text='游戏类型：').grid(row=2, column=0, pady=5, sticky=tk.W)
+        # 游戏区服
+        ttk.Label(parent, text='游戏区服：').grid(row=2, column=0, pady=5, sticky=tk.W)
+
+        # 游戏区服选项
+        ttk.Radiobutton(parent, text='莱服', variable=self.server_region, value='ru') \
+            .grid(row=2, column=1, sticky=tk.W)
+        ttk.Radiobutton(parent, text='直营服', variable=self.server_region, value='zh_sg', style='warning') \
+            .grid(row=2, column=2, sticky=tk.W)
+        ttk.Radiobutton(parent, text='国服', variable=self.server_region, value='zh_cn', style='danger') \
+            .grid(row=2, column=3, sticky=tk.W)
+
+        # 游戏类型
+        ttk.Label(parent, text='游戏类型：').grid(row=3, column=0, pady=5, sticky=tk.W)
 
         # 游戏类型选项
-        ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True) \
-            .grid(row=2, column=1, sticky=tk.W)
-        ttk.Radiobutton(parent, text='PT服', variable=self.is_release, value=False) \
-            .grid(row=2, column=2, sticky=tk.W)
-
-        self.detect_game_type_button = ttk.Button(parent, text='自动检测', command=self.detect_game_type())
-        self.detect_game_type_button.grid(row=2, column=3)
-
-        # 第四行：下载源
-        ttk.Label(parent, text='汉化来源：').grid(row=3, column=0, pady=5, sticky=tk.W)
-        # 下载源选项
-        ttk.Radiobutton(parent, text='Gitee', variable=self.download_source, value='gitee') \
+        ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True, style='success') \
             .grid(row=3, column=1, sticky=tk.W)
-        ttk.Radiobutton(parent, text='GitHub', variable=self.download_source, value='github') \
+        ttk.Radiobutton(parent, text='PT服', variable=self.is_release, value=False, style='danger') \
             .grid(row=3, column=2, sticky=tk.W)
-        ttk.Radiobutton(parent, text='本地文件', variable=self.download_source, value='local') \
-            .grid(row=3, column=3, sticky=tk.W)
 
-        # 第五行：体验增强包/汉化修改包
+        self.detect_game_type_button = ttk.Button(parent, text='自动检测',
+                                                  command=lambda: self.detect_game_type(manually=True))
+        self.detect_game_type_button.grid(row=3, column=3)
+
+        # 下载源
+        ttk.Label(parent, text='汉化来源：').grid(row=4, column=0, pady=5, sticky=tk.W)
+        # 下载源选项
+        ttk.Radiobutton(parent, text='Gitee', variable=self.download_source, value='gitee', style='danger') \
+            .grid(row=4, column=1, sticky=tk.W)
+        ttk.Radiobutton(parent, text='GitHub', variable=self.download_source, value='github', style='dark') \
+            .grid(row=4, column=2, sticky=tk.W)
+        ttk.Radiobutton(parent, text='本地文件', variable=self.download_source, value='local') \
+            .grid(row=4, column=3, sticky=tk.W)
+
+        # 体验增强包/汉化修改包
         ttk.Checkbutton(parent, text='安装体验增强包', variable=self.ee_selection) \
-            .grid(row=5, column=0, columnspan=2, pady=5, sticky=tk.W)
-        ttk.Checkbutton(parent, text='安装模组（汉化修改包）', variable=self.mod_selection) \
             .grid(row=6, column=0, columnspan=2, pady=5, sticky=tk.W)
-        self.mods_button = ttk.Button(parent, text='模组目录', command=lambda: self.open_mods_folder())
-        self.mods_button.grid(row=6, column=2, columnspan=1)
+        ttk.Checkbutton(parent, text='安装模组（汉化修改包）', variable=self.mod_selection) \
+            .grid(row=7, column=0, columnspan=2, pady=5, sticky=tk.W)
+        self.mods_button = ttk.Button(parent, text='模组目录', command=self.open_mods_folder)
+        self.mods_button.grid(row=7, column=2, columnspan=1)
         self.download_mods_button = ttk.Button(parent, text='下载模组',
                                                command=lambda: webbrowser.open_new_tab(mods_link))
-        self.download_mods_button.grid(row=6, column=3, columnspan=1)
+        self.download_mods_button.grid(row=7, column=3, columnspan=1)
 
-        # 第六行：安装路径选择/下载进度
+        # 安装路径选择/下载进度
         self.install_path_entry = ttk.Entry(parent, textvariable=self.mo_path, width=20)
         self.install_path_button = ttk.Button(parent, text='选择文件', command=self.choose_mo)
         self.download_progress_label = ttk.Label(parent, text='下载进度：')
         self.download_progress_info = ttk.Label(parent, textvariable=self.download_progress_text)
 
-        # 第七行：安装/更新按钮
-        self.install_button = ttk.Button(parent, text='安装汉化', command=lambda: self.install_update(),
+        # 安装/更新按钮
+        self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update,
                                          style=ttk.SUCCESS)
-        self.install_button.grid(row=7, column=0, pady=5)
+        self.install_button.grid(row=8, column=0, pady=5)
 
         # 安装进度
-        ttk.Label(parent, textvariable=self.install_progress_text).grid(row=7, column=1, columnspan=3,
+        ttk.Label(parent, textvariable=self.install_progress_text).grid(row=8, column=1, columnspan=3,
                                                                         padx=5, sticky=tk.W)
 
         self.install_progress_bar = ttk.Progressbar(parent, variable=self.install_progress, maximum=100.0,
                                                     style='success-striped', length=400)
-        self.install_progress_bar.grid(row=8, column=0, columnspan=4, padx=10)
+        self.install_progress_bar.grid(row=9, column=0, columnspan=4, padx=10)
 
-        # 第八行：启动游戏
-        self.launch_button = ttk.Button(parent, text='启动游戏', command=launch_game, style=ttk.WARNING)
-        self.launch_button.grid(row=9, column=0, pady=5)
+        # 启动游戏
+        self.launch_button = ttk.Button(parent, text='启动游戏', command=self.launch_game, style=ttk.WARNING)
+        self.launch_button.grid(row=10, column=0, pady=5)
 
         # 启动器状态
-        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=9, column=1, columnspan=3,
+        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=10, column=1, columnspan=3,
                                                                        padx=5, sticky=tk.W)
 
         # 相关链接
         about_button = ttk.Button(parent, text='关于项目', command=lambda: webbrowser.open_new_tab(project_repo_link),
                                   style=ttk.INFO)
-        about_button.grid(row=10, column=0, pady=5)
+        about_button.grid(row=11, column=0, pady=5)
 
         src_button = ttk.Button(parent, text='代码仓库', command=lambda: webbrowser.open_new_tab(installer_repo_link),
                                 style=ttk.DANGER)
-        src_button.grid(row=10, column=1, pady=5, padx=5)
+        src_button.grid(row=11, column=1, pady=5, padx=5)
 
         # 版权声明
-        ttk.Label(parent, text='© 2024 LocalizedKorabli').grid(row=10, column=2, columnspan=3, pady=5)
+        ttk.Label(parent, text='© 2024 LocalizedKorabli').grid(row=11, column=2, columnspan=3, pady=5)
 
         # 根据下载源选项显示或隐藏安装路径选择
         self.download_source.trace('w', self.toggle_install_path)
 
         choice = self.parse_choice()
 
+        self.server_region.set(choice.get('server_region', 'ru'))
         self.is_release.set(choice.get('is_release', True))
         self.download_source.set(choice.get('download_source', 'gitee'))
         self.ee_selection.set(choice.get('use_ee', True))
@@ -217,7 +241,7 @@ class LocalizationInstaller:
         self.safely_set_download_progress_text('准备')
         self.safely_set_install_progress_text('准备')
         self.safely_set_install_progress(progress=0.0)
-        self.game_launcher_status.set(find_launcher())
+        self.game_launcher_status.set(self.find_launcher())
 
     def safely_set_download_progress_text(self, msg: str):
         self.root.after(0, self.download_progress_text.set(msg))
@@ -230,13 +254,13 @@ class LocalizationInstaller:
 
     def toggle_install_path(self, *args):
         if self.download_source.get() == 'local':
-            self.install_path_entry.grid(row=4, column=0, columnspan=3)
-            self.install_path_button.grid(row=4, column=3)
+            self.install_path_entry.grid(row=5, column=0, columnspan=3)
+            self.install_path_button.grid(row=5, column=3)
             self.download_progress_label.grid_forget()
             self.download_progress_info.grid_forget()
         else:
-            self.download_progress_label.grid(row=4, column=0, pady=5, sticky=tk.W)
-            self.download_progress_info.grid(row=4, column=1, pady=5, columnspan=3, sticky=tk.W)
+            self.download_progress_label.grid(row=5, column=0, pady=5, sticky=tk.W)
+            self.download_progress_info.grid(row=5, column=1, pady=5, columnspan=3, sticky=tk.W)
             self.install_path_entry.grid_forget()
             self.install_path_button.grid_forget()
 
@@ -257,7 +281,7 @@ class LocalizationInstaller:
             return
         self.is_installing = True
         self.save_choice()
-        tr = threading.Thread(target=lambda: self.do_install_update())
+        tr = threading.Thread(target=self.do_install_update)
         tr.start()
 
     def do_install_update(self):
@@ -364,7 +388,7 @@ class LocalizationInstaller:
                 nothing_wrong = False
         if nothing_wrong:
             self.safely_set_install_progress_text('安装汉化包——正在移动文件')
-            mo_dir = target_path.joinpath('texts').joinpath('ru').joinpath('LC_MESSAGES')
+            mo_dir = target_path.joinpath('texts').joinpath(self.server_region.get()).joinpath('LC_MESSAGES')
             mkdir(mo_dir)
             old_mo = mo_dir.joinpath('global.mo')
             old_mo_backup = mo_dir.joinpath('global.mo.old')
@@ -498,20 +522,26 @@ class LocalizationInstaller:
     def get_choice_template(self):
         self.detect_game_type()
         return {
+            'server_region': self.server_region.get(),
             'is_release': self.is_release.get(),
             'download_source': 'gitee',
             'use_ee': True,
             'apply_mods': True
         }
 
-    def detect_game_type(self):
+    def detect_game_type(self, manually: bool = False):
+        if not manually:
+            self.server_region.set('ru')
+            self.is_release.set(True)
         if not os.path.isfile('game_info.xml'):
             return
         game_info = ET.parse('game_info.xml')
-        game_id = game_info.find(".//protocol/game/id")
-        if not game_id:
+        game_id = game_info.find('.//game/id')
+        if game_id is None:
             return
-        self.is_release.set('RPT.PRODUCTION' not in game_id.text)
+        game_type: (str, bool) = server_regions_dict.get(game_id.text, ('ru', 'PT.PRODUCTION' not in game_id.text))
+        self.server_region.set(game_type[0])
+        self.is_release.set(game_type[1])
 
     def get_local_l10n_version(self) -> str:
         info_file = Path('bin').joinpath(self.get_run_dir()).joinpath('l10n').joinpath('version.info')
@@ -533,19 +563,44 @@ class LocalizationInstaller:
             except ValueError:
                 return f'未知，安装时间未知'
 
+    def find_launcher(self) -> str:
+        if os.path.isfile('lgc_api.exe'):
+            self.game_launcher_file = 'lgc_api.exe'
+            return '莱服客户端'
+        elif os.path.isfile('wgc_api.exe'):
+            self.game_launcher_file = 'wgc_api.exe'
+            return '直营服客户端'
+        elif os.path.isfile('wgc360_api.exe'):
+            self.game_launcher_file = 'wgc360_api.exe'
+            return '国服客户端'
+        return '未找到客户端'
+
+    def launch_game(self) -> None:
+        if not self.game_launcher_file or not os.path.isfile(self.game_launcher_file):
+            self.find_launcher()
+        if not self.game_launcher_file or not os.path.isfile(self.game_launcher_file):
+            return
+        subprocess.run(self.game_launcher_file)
+
     def parse_choice(self) -> Dict[str, str]:
         if self.choice:
             return self.choice
+        self.choice = {}
         choice_file = 'l10n_installer/settings/choice.json'
         if os.path.isfile(choice_file):
             try:
                 with open(choice_file, 'r', encoding='utf-8') as f:
                     self.choice = json.load(f)
-                    return self.choice
             except Exception:
                 pass
-        self.choice = self.get_choice_template()
+        self.check_choice()
         return self.choice
+
+    def check_choice(self):
+        template = self.get_choice_template()
+        for choice in ['server_region', 'is_release', 'download_source', 'use_ee', 'apply_mods']:
+            if choice not in self.choice.keys():
+                self.choice[choice] = template[choice]
 
     def save_choice(self) -> None:
         if self.choice:
@@ -585,17 +640,6 @@ def process_modification_file(source_mo, translated_path: str):
                 source_mo.append(t_entry)
 
 
-def launch_game():
-    if os.path.isfile('lgc_api.exe'):
-        subprocess.run('lgc_api.exe')
-
-
-def find_launcher() -> str:
-    if os.path.isfile('lgc_api.exe'):
-        return '莱服客户端'
-    return '未找到客户端'
-
-
 if __name__ == '__main__':
     root = ttk.Window(iconphoto=None)
     root.iconbitmap(os.path.join(resource_path, 'icon.ico'))
@@ -605,4 +649,4 @@ if __name__ == '__main__':
     app = LocalizationInstaller(root)
     root.mainloop()
 
-# pyinstaller -w -i icon.ico --onefile --add-data "resources\*;resources" installer_gui.py --clean
+# pyinstaller -w -i resources/icon.ico --onefile --add-data "resources\*;resources" installer_gui.py --clean
