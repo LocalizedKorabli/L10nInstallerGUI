@@ -32,12 +32,13 @@ from typing import Any, Dict, List, Tuple, Optional
 import polib
 import requests
 import ttkbootstrap as ttk
+from ttkbootstrap.dialogs.dialogs import Messagebox
 
 mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.0.3a'
+version = '0.0.3b'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -252,6 +253,17 @@ class LocalizationInstaller:
     def safely_set_install_progress(self, progress: Optional[float] = None):
         self.root.after(0, self.install_progress.set(progress))
 
+    def popup_result(self, nothing_wrong: bool):
+        if nothing_wrong:
+            msg_response = Messagebox.show_question('汉化安装完成。是否启动游戏？', '安装完成', alert=True, buttons=[
+                '启动游戏:primary',
+                '返回主页:secondary'
+            ])
+            if msg_response == '启动游戏':
+                self.launch_game()
+        else:
+            Messagebox.show_error('汉化安装失败。请检查您的网络，选择合适的汉化来源重试。', '安装失败')
+
     def toggle_install_path(self, *args):
         if self.download_source.get() == 'local':
             self.install_path_entry.grid(row=6, column=0, columnspan=3)
@@ -278,6 +290,7 @@ class LocalizationInstaller:
 
     def install_update(self):
         if self.is_installing:
+            Messagebox.show_warning('安装已在进行！', '安装汉化')
             return
         self.is_installing = True
         self.save_choice()
@@ -288,6 +301,7 @@ class LocalizationInstaller:
         self.safely_set_install_progress(progress=0.0)
         run_dirs = self.run_dirs.keys()
         if len(run_dirs) == 0:
+            self.root.after(0, Messagebox.show_error, '未发现游戏版本，无法安装。', '安装汉化')
             return
         is_release = self.is_release.get()
         for run_dir in run_dirs:
@@ -413,6 +427,7 @@ class LocalizationInstaller:
             self.safely_set_install_progress(progress=100.0)
         self.safely_set_install_progress_text('完成！' if nothing_wrong else '失败！')
         self.parse_game_version()
+        self.root.after(0, self.popup_result, nothing_wrong)
 
     def check_version_and_fetch_mo(self, download_link_base: str, proxies: Dict) -> (str, str):
         remote_version: str = 'latest'
@@ -509,6 +524,8 @@ class LocalizationInstaller:
         self.localization_status_2nd.set('')
         v_1st = ''
         v_2nd = ''
+        if not os.path.isdir('bin'):
+            return
         for v_dir_b in os.listdir(Path('bin')):
             v_dir = str(v_dir_b)
             # v_dir_num = 0
@@ -601,6 +618,7 @@ class LocalizationInstaller:
         if not self.game_launcher_file or not os.path.isfile(self.game_launcher_file):
             self.find_launcher()
         if not self.game_launcher_file or not os.path.isfile(self.game_launcher_file):
+            Messagebox.show_warning('未找到客户端！', '启动游戏')
             return
         subprocess.run(self.game_launcher_file)
 
@@ -670,8 +688,10 @@ def is_valid_build_dir(build_dir: Path) -> bool:
 
 
 if __name__ == '__main__':
-    root = ttk.Window(iconphoto=None)
-    root.iconbitmap(os.path.join(resource_path, 'icon.ico'))
+    root = ttk.Window()
+    icon = os.path.join(resource_path, 'icon.ico')
+    root.iconbitmap(default=icon)
+    root.iconbitmap(bitmap=icon)
     half_screen_width = int(root.winfo_screenwidth() / 2) - 200
     half_screen_height = int(root.winfo_screenheight() / 2) - 300
     root.geometry(f'+{half_screen_width}+{half_screen_height}')
