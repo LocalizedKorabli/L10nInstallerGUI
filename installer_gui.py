@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.1'
+version = '0.1.2'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -161,6 +161,8 @@ tooltip_license = '本开源项目使用GNU AGPL 3.0许可证'
 
 
 class LocalizationInstallerAuto:
+    no_gui: bool
+    no_run: bool
     game_path: Path
     is_release: bool
     use_ee: bool
@@ -174,8 +176,13 @@ class LocalizationInstallerAuto:
     install_progress: tk.DoubleVar
 
     def __init__(self, parent: tk.Tk, options: Any):
+        self.no_gui = bool(options.no_gui)
+        if self.no_gui:
+            parent.overrideredirect(1)
+            parent.withdraw()
         self.root = parent
         self.root.title(f'汉化安装器[自动更新模式]v{version}')
+        self.no_run = bool(options.no_run)
         self.game_path = Path(options.game_path)
         self.is_release = bool(options.is_release)
         self.use_ee = bool(options.use_ee)
@@ -216,7 +223,8 @@ class LocalizationInstallerAuto:
         self.root.after(1000, self.update_timer)
 
     def on_closed(self):
-        subprocess.run(find_launcher(self.game_path)[0])
+        if not self.no_run:
+            subprocess.run(find_launcher(self.game_path)[0])
 
 
 class LocalizationInstaller:
@@ -1311,11 +1319,13 @@ def is_admin():
 def run():
     parser = OptionParser()
     parser.add_option('--auto', dest='auto', action='store_true', default=False)
+    parser.add_option('--nogui', dest='no_gui', action='store_true', default=False)
+    parser.add_option('--norun', dest='no_run', action='store_true', default=False)
     parser.add_option('--gamepath', dest='game_path')
-    parser.add_option('--release', dest='is_release', action='store_true', default=True)
-    parser.add_option('--ee', dest='use_ee', action='store_true', default=True)
-    parser.add_option('--mods', dest='use_mods', action='store_true', default=True)
-    parser.add_option('--isolation', dest='isolation', action='store_true', default=True)
+    parser.add_option('--release', dest='is_release', action='store_true', default=False)
+    parser.add_option('--ee', dest='use_ee', action='store_true', default=False)
+    parser.add_option('--mods', dest='use_mods', action='store_true', default=False)
+    parser.add_option('--isolation', dest='isolation', action='store_true', default=False)
     parser.add_option('--src', dest='download_src')
     parser.add_option('--region', dest='server_region')
     options, _ = parser.parse_args()
