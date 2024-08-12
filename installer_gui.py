@@ -1356,16 +1356,6 @@ def run():
         app.on_closed()
 
 
-def redirect_output(file_path):
-    class OutputToFile:
-        def write(self, s):
-            with open(file_path, 'a') as f:
-                f.write(s)
-
-    sys.stdout = OutputToFile()  # 重定向 stdout 到文件
-    sys.stderr = OutputToFile()  # 重定向 stderr 到文件
-
-
 if __name__ == '__main__':
     dev_env = sys.executable.endswith('python.exe')
     if dev_env:
