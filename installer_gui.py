@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.2'
+version = '0.1.3'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -283,7 +283,8 @@ class LocalizationInstaller:
 
         self.game_path_combo = ttk.Combobox(parent, width=26, textvariable=self.game_path, state='readonly')
         self.game_path_combo.grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky=tk.W)
-        ToolTip(self.game_path_combo, msg=lambda: get_str_from_optional_path(self.get_game_path()), delay=1.0)
+        ToolTip(self.game_path_combo, msg=lambda: get_str_from_optional_path(self.get_game_path(), '游戏目录：'),
+                delay=1.0)
 
         self.refresh_path_combo()
 
@@ -386,8 +387,9 @@ class LocalizationInstaller:
 
         self.gen_auto_update_entry = ttk.Entry(parent, textvariable=self.gen_auto_update_path, width=18,
                                                state='readonly')
-        ToolTip(self.gen_auto_update_entry, msg=lambda: get_str_from_optional_path(self.get_au_shortcut_path()),
-                delay=1.0)
+        ToolTip(self.gen_auto_update_entry, msg=lambda: get_str_from_optional_path(
+            self.get_au_shortcut_path(), '快捷方式生成目录：'
+        ), delay=1.0)
 
         self.choose_au_shortcut_path_button = ttk.Button(parent, text='选择位置', command=self.choose_au_shortcut_path,
                                                          style='dark')
@@ -873,17 +875,23 @@ def get_sha256_for_mo(mo_path: Path):
 def _install_update(
         gui: Union[LocalizationInstaller, LocalizationInstallerAuto],
         game_path: Path = None,
-        is_release: Optional[bool] = True,
-        use_ee: bool = True,
-        use_mods: bool = True,
-        isolation: bool = True,
+        is_release: bool = False,
+        use_ee: bool = False,
+        use_mods: bool = False,
+        isolation: bool = False,
         download_src: str = '',
         server_region: str = 'ru'
 ) -> bool:
     full_gui = isinstance(gui, LocalizationInstaller)
-    gui.safely_set_install_progress(progress=0.0)
     if full_gui:
         game_path = gui.get_game_path()
+        is_release = gui.is_release.get()
+        use_ee = gui.ee_selection.get()
+        use_mods = gui.mods_selection.get()
+        isolation = gui.isolation.get()
+        download_src = gui.download_source.get()
+        server_region = gui.server_region.get()
+    gui.safely_set_install_progress(progress=0.0)
     if not game_path or not is_valid_game_path(game_path):
         if full_gui:
             gui.root.after(0, Messagebox.show_error, '游戏目录不可用，无法安装。', '安装汉化')
@@ -902,8 +910,6 @@ def _install_update(
         else:
             Messagebox.show_error('未发现游戏版本，无法更新汉化。', '自动更新')
         return False
-    if full_gui:
-        is_release = gui.is_release.get()
     for run_dir in run_dirs:
         target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
         mkdir(target_path)
@@ -969,7 +975,6 @@ def _install_update(
     gui.safely_set_install_progress(progress=30.0)
     if full_gui:
         gui.safely_set_install_progress_text('安装汉化包')
-        download_src = gui.download_source.get()
     nothing_wrong = True
     # remote_version = ''
     # downloaded_mo = ''
@@ -1036,8 +1041,6 @@ def _install_update(
         if nothing_wrong:
             if full_gui:
                 gui.safely_set_install_progress_text('安装汉化包——正在移动文件')
-            if full_gui:
-                server_region = gui.server_region.get()
             mo_dir = target_path.joinpath('texts').joinpath(server_region).joinpath('LC_MESSAGES')
             mkdir(mo_dir)
             old_mo = mo_dir.joinpath('global.mo')
@@ -1293,10 +1296,10 @@ def get_local_l10n_version(gui: Optional[LocalizationInstaller], game_path: Path
     return to_return if check_sha256(mo_path, mo_sha256) else ('', to_return[1] + '（被篡改）')
 
 
-def get_str_from_optional_path(target_path: Optional[Path]) -> str:
+def get_str_from_optional_path(target_path: Optional[Path], prefix: str = '') -> str:
     if not target_path:
         return ''
-    return str(target_path.absolute())
+    return prefix + str(target_path.absolute())
 
 
 # Returns (launcher_file: Path, launcher_status: str)
