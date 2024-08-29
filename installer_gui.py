@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.3'
+version = '0.1.5'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -64,6 +64,10 @@ download_routes = {
             'url': 'https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/',
             'direct': False
         },
+        'gitlab': {
+            'url': 'https://gitlab.com/localizedkorabli/korabli-lesta-l10n/-/raw/main/Localizations/latest/',
+            'direct': False
+        },
         'github': {
             'url': 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/',
             'direct': False
@@ -73,6 +77,11 @@ download_routes = {
         'gitee': {
             'url': 'https://gitee.com/localized-korabli/Korabli-LESTA-L10N-PublicTest/raw/Localizations/Localizations'
                    '/latest/',
+            'direct': False
+        },
+        'gitlab': {
+            'url': 'https://gitlab.com/localizedkorabli/korabli-lesta-l10n-publictest/-/raw/Localizations'
+                   '/Localizations/latest/',
             'direct': False
         },
         'github': {
@@ -128,6 +137,14 @@ tooltip_auto_search_clients = '''自动检测电脑上安装的
 tooltip_select_game_path = '手动选择战舰世界客户端路径'
 
 tooltip_detect_game_type = '自动检测游戏区服和类型'
+
+tooltip_src_gitee = '从适合大陆用户的Gitee线路（镜像）下载汉化包'
+
+tooltip_src_gitlab = '从适合全球用户的GitLab线路（镜像）下载汉化包（大陆用户访问可能较慢）'
+
+tooltip_src_github = '从适合港澳台/国外用户的GitHub线路（源仓库）下载汉化包'
+
+tooltip_src_local = '选择本地汉化包'
 
 tooltip_mo_path_selection = '手动选择要安装的汉化包文件'
 
@@ -312,20 +329,20 @@ class LocalizationInstaller:
 
         # 游戏区服选项
         ttk.Radiobutton(parent, text='莱服', variable=self.server_region, value='ru') \
-            .grid(row=5, column=1, sticky=tk.W)
+            .grid(row=5, column=1, padx=5, pady=5, sticky=tk.W)
         ttk.Radiobutton(parent, text='直营服', variable=self.server_region, value='zh_sg', style='warning') \
-            .grid(row=5, column=2, sticky=tk.W)
+            .grid(row=5, column=2, padx=5, pady=5, sticky=tk.W)
         ttk.Radiobutton(parent, text='国服', variable=self.server_region, value='zh_cn', style='danger') \
-            .grid(row=5, column=3, sticky=tk.W)
+            .grid(row=5, column=3, padx=5, pady=5, sticky=tk.W)
 
         # 游戏类型
         ttk.Label(parent, text='游戏类型：').grid(row=6, column=0, padx=5, pady=5, sticky=tk.W)
 
         # 游戏类型选项
         ttk.Radiobutton(parent, text='正式服', variable=self.is_release, value=True, style='success') \
-            .grid(row=6, column=1, sticky=tk.W)
+            .grid(row=6, column=1, padx=5, pady=5, sticky=tk.W)
         ttk.Radiobutton(parent, text='PT服', variable=self.is_release, value=False, style='danger') \
-            .grid(row=6, column=2, sticky=tk.W)
+            .grid(row=6, column=2, padx=5, pady=5, sticky=tk.W)
 
         self.detect_game_type_button = ttk.Button(parent, text='自动检测',
                                                   command=lambda: self.detect_game_status(manually=True))
@@ -335,29 +352,39 @@ class LocalizationInstaller:
         # 下载源
         ttk.Label(parent, text='汉化来源：').grid(row=7, column=0, padx=5, pady=5, sticky=tk.W)
         # 下载源选项
-        ttk.Radiobutton(parent, text='Gitee', variable=self.download_source, value='gitee', style='danger') \
-            .grid(row=7, column=1, sticky=tk.W)
-        ttk.Radiobutton(parent, text='GitHub', variable=self.download_source, value='github', style='dark') \
-            .grid(row=7, column=2, sticky=tk.W)
-        ttk.Radiobutton(parent, text='本地文件', variable=self.download_source, value='local') \
-            .grid(row=7, column=3, sticky=tk.W)
+        self.gitee_button = ttk.Radiobutton(parent, text='Gitee', variable=self.download_source,
+                                            value='gitee', style='danger')
+        self.gitee_button.grid(row=8, column=0, padx=5, pady=5, sticky=tk.W)
+        ToolTip(self.gitee_button, tooltip_src_gitee, delay=1.0)
+        self.gitlab_button = ttk.Radiobutton(parent, text='GitLab', variable=self.download_source,
+                                             value='gitlab', style='warning')
+        self.gitlab_button.grid(row=8, column=1, padx=5, pady=5, sticky=tk.W)
+        ToolTip(self.gitlab_button, tooltip_src_gitlab, delay=1.0)
+        self.github_button = ttk.Radiobutton(parent, text='GitHub', variable=self.download_source,
+                                             value='github', style='dark')
+        self.github_button.grid(row=8, column=2, padx=5, pady=5, sticky=tk.W)
+        ToolTip(self.github_button, tooltip_src_github, delay=1.0)
+        self.local_file_button = ttk.Radiobutton(parent, text='本地文件', variable=self.download_source,
+                                                 value='local')
+        self.local_file_button.grid(row=8, column=3, padx=5, pady=5, sticky=tk.W)
+        ToolTip(self.local_file_button, tooltip_src_local, delay=1.0)
 
         # 体验增强包/汉化修改包
         self.ee_check_button = ttk.Checkbutton(parent, text='安装体验增强包', variable=self.ee_selection)
-        self.ee_check_button.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
+        self.ee_check_button.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
         ToolTip(self.ee_check_button, tooltip_ee_selection, delay=1.0)
         self.mods_check_button = ttk.Checkbutton(parent, text='安装模组（汉化修改包）', variable=self.mods_selection)
-        self.mods_check_button.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
+        self.mods_check_button.grid(row=11, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
         ToolTip(self.mods_check_button, tooltip_mods_selection, delay=1.0)
         self.isolation_check_button = ttk.Checkbutton(parent, text='版本隔离', variable=self.isolation)
-        self.isolation_check_button.grid(row=11, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
+        self.isolation_check_button.grid(row=12, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
         ToolTip(self.isolation_check_button, tooltip_isolation, delay=1.0)
         self.mods_dir_button = ttk.Button(parent, text='模组目录', command=self.open_mods_folder)
-        self.mods_dir_button.grid(row=11, column=2, columnspan=1)
+        self.mods_dir_button.grid(row=12, column=2, columnspan=1)
         ToolTip(self.mods_dir_button, tooltip_mods_dir, delay=1.0)
         self.download_mods_button = ttk.Button(parent, text='下载模组', style='info',
                                                command=lambda: webbrowser.open_new_tab(mods_link))
-        self.download_mods_button.grid(row=11, column=3, columnspan=1)
+        self.download_mods_button.grid(row=12, column=3, columnspan=1)
         ToolTip(self.download_mods_button, tooltip_download_mods, delay=1.0)
 
         # 安装路径选择/下载进度
@@ -370,19 +397,19 @@ class LocalizationInstaller:
         # 安装/更新按钮
         self.install_button = ttk.Button(parent, text='安装汉化', command=self.install_update,
                                          style=ttk.SUCCESS)
-        self.install_button.grid(row=12, column=0, pady=5)
+        self.install_button.grid(row=13, column=0, pady=5)
 
         # 安装进度
-        ttk.Label(parent, textvariable=self.install_progress_text).grid(row=12, column=1, columnspan=3,
+        ttk.Label(parent, textvariable=self.install_progress_text).grid(row=13, column=1, columnspan=3,
                                                                         padx=5, sticky=tk.W)
 
         self.install_progress_bar = ttk.Progressbar(parent, variable=self.install_progress, maximum=100.0,
                                                     style='success-striped', length=400)
-        self.install_progress_bar.grid(row=13, column=0, columnspan=4, padx=10, pady=5)
+        self.install_progress_bar.grid(row=14, column=0, columnspan=4, padx=10, pady=5)
 
         # 自动更新
         self.gen_auto_update_button = ttk.Checkbutton(parent, text='自动更新', variable=self.gen_auto_update)
-        self.gen_auto_update_button.grid(row=14, column=0, columnspan=1, padx=10, pady=10)
+        self.gen_auto_update_button.grid(row=15, column=0, columnspan=1, padx=10, pady=10)
         ToolTip(self.gen_auto_update_button, tooltip_au, delay=1.0)
 
         self.gen_auto_update_entry = ttk.Entry(parent, textvariable=self.gen_auto_update_path, width=18,
@@ -396,29 +423,29 @@ class LocalizationInstaller:
 
         # 启动游戏
         self.launch_button = ttk.Button(parent, text='启动游戏', command=self.launch_game, style=ttk.WARNING)
-        self.launch_button.grid(row=15, column=0, pady=5)
+        self.launch_button.grid(row=16, column=0, pady=5)
         ToolTip(self.launch_button, tooltip_launch_game, delay=1.0)
 
         # 启动器状态
-        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=15, column=1, columnspan=3,
+        ttk.Label(parent, textvariable=self.game_launcher_status).grid(row=16, column=1, columnspan=3,
                                                                        padx=5, sticky=tk.W)
 
         # 相关链接
         self.about_button = ttk.Button(parent, text='关于项目',
                                        command=lambda: webbrowser.open_new_tab(project_repo_link),
                                        style=ttk.INFO)
-        self.about_button.grid(row=16, column=0, pady=5)
+        self.about_button.grid(row=17, column=0, pady=5)
         ToolTip(self.about_button, tooltip_about, delay=1.0)
 
         self.src_button = ttk.Button(parent, text='代码仓库',
                                      command=lambda: webbrowser.open_new_tab(installer_repo_link),
                                      style=ttk.DANGER)
-        self.src_button.grid(row=16, column=1, pady=5, padx=5)
+        self.src_button.grid(row=17, column=1, pady=5, padx=5)
         ToolTip(self.src_button, tooltip_source_code, delay=1.0)
 
         # 版权声明
         self.license_text = ttk.Label(parent, text='© 2024 LocalizedKorabli')
-        self.license_text.grid(row=16, column=2, columnspan=3, pady=5)
+        self.license_text.grid(row=17, column=2, columnspan=3, pady=5)
         ToolTip(self.license_text, tooltip_license, delay=1.0)
 
         # 根据汉化来源选项显示或隐藏安装路径选择
@@ -450,10 +477,13 @@ class LocalizationInstaller:
 
         self.gen_auto_update_path.set(au_shortcut_path_desktop)
 
+        self.reset_progress()
+        self.game_launcher_status.set(find_launcher(self.get_game_path())[1])
+
+    def reset_progress(self):
         self.safely_set_download_progress_text('准备')
         self.safely_set_install_progress_text('准备')
         self.safely_set_install_progress(progress=0.0)
-        self.game_launcher_status.set(find_launcher(self.get_game_path())[1])
 
     def safely_set_download_progress_text(self, msg: str):
         self.root.after(0, self.download_progress_text.set(msg))
@@ -477,20 +507,22 @@ class LocalizationInstaller:
 
     def on_download_source_changed(self, *args):
         if self.download_source.get() == 'local':
-            self.mo_path_entry.grid(row=8, column=0, columnspan=3)
-            self.mo_path_selection_button.grid(row=8, column=3)
+            self.mo_path_entry.grid(row=9, column=0, columnspan=3)
+            self.mo_path_selection_button.grid(row=9, column=3)
             self.download_progress_label.grid_forget()
             self.download_progress_info.grid_forget()
             self.gen_auto_update.set(False)
             self.gen_auto_update_button.configure(state='disabled')
         else:
-            self.download_progress_label.grid(row=8, column=0, padx=5, pady=5, sticky=tk.W)
-            self.download_progress_info.grid(row=8, column=1, pady=5, columnspan=3, sticky=tk.W)
+            self.download_progress_label.grid(row=9, column=0, padx=5, pady=5, sticky=tk.W)
+            self.download_progress_info.grid(row=9, column=1, pady=5, columnspan=3, sticky=tk.W)
             self.mo_path_entry.grid_forget()
             self.mo_path_selection_button.grid_forget()
             self.gen_auto_update_button.configure(state='')
 
     def on_game_path_changed(self, *args) -> None:
+        self.reset_progress()
+        self.gen_auto_update.set(False)
         if self.game_path.get() == game_path_unknown:
             return
 
@@ -525,8 +557,8 @@ class LocalizationInstaller:
     def on_au_selected(self, *args):
         if self.gen_auto_update.get():
             Messagebox.ok(msg_auto_update_notification)
-            self.gen_auto_update_entry.grid(row=14, column=1, columnspan=2)
-            self.choose_au_shortcut_path_button.grid(row=14, column=3, columnspan=1)
+            self.gen_auto_update_entry.grid(row=15, column=1, columnspan=2)
+            self.choose_au_shortcut_path_button.grid(row=15, column=3, columnspan=1)
         else:
             self.gen_auto_update_entry.grid_forget()
             self.choose_au_shortcut_path_button.grid_forget()
@@ -1338,8 +1370,8 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        half_screen_width = int(root.winfo_screenwidth() / 2) - 225
-        half_screen_height = int(root.winfo_screenheight() / 2) - 300
+        half_screen_width = int(root.winfo_screenwidth() / 2) - 234
+        half_screen_height = int(root.winfo_screenheight() / 2) - 358
         root.geometry(f'+{half_screen_width}+{half_screen_height}')
         app = LocalizationInstaller(root)
         root.mainloop()
