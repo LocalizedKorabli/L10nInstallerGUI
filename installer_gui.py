@@ -879,6 +879,8 @@ def process_modification_file(source_mo, mod_path: str):
 
 
 def is_valid_game_path(game_path: Path) -> bool:
+    if game_path is None:
+        return False
     game_info_file = game_path.joinpath('game_info.xml')
     if not game_info_file.is_file() or not game_path.joinpath('bin').is_dir():
         return False
