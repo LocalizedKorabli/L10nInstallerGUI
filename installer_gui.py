@@ -583,9 +583,10 @@ class LocalizationInstaller:
         game_path_str = self.game_path.get()
         if not overwrite:
             return None
-        game_path = Path(game_path_str)
-        if is_valid_game_path(game_path):
-            return game_path
+        if game_path_str != game_path_unknown:
+            game_path = Path(game_path_str)
+            if is_valid_game_path(game_path):
+                return game_path
         if is_valid_game_path(Path('.')):
             self.game_path.set(game_path_current)
             self.available_game_paths.append(game_path_current)
@@ -879,8 +880,6 @@ def process_modification_file(source_mo, mod_path: str):
 
 
 def is_valid_game_path(game_path: Path) -> bool:
-    if game_path is None:
-        return False
     game_info_file = game_path.joinpath('game_info.xml')
     if not game_info_file.is_file() or not game_path.joinpath('bin').is_dir():
         return False
