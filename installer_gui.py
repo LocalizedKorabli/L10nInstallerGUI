@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.5'
+version = '0.1.6'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -481,8 +481,8 @@ class LocalizationInstaller:
         self.game_launcher_status.set(find_launcher(self.get_game_path())[1])
 
     def reset_progress(self):
-        self.safely_set_download_progress_text('准备')
-        self.safely_set_install_progress_text('准备')
+        self.safely_set_download_progress_text('等待')
+        self.safely_set_install_progress_text('等待')
         self.safely_set_install_progress(progress=0.0)
 
     def safely_set_download_progress_text(self, msg: str):
@@ -620,8 +620,7 @@ class LocalizationInstaller:
                 if not games:
                     return []
                 path_strs = [game.find('working_dir').text for game in games if game.find('working_dir') is not None]
-                path_strs_filtered = [dir_str for dir_str in path_strs if
-                                      'Tank' not in dir_str and 'GameCheck' not in dir_str]
+                path_strs_filtered = [dir_str for dir_str in path_strs if is_valid_game_path(Path(dir_str))]
                 for path_str in path_strs_filtered:
                     self.available_game_paths.append(path_str)
                 self.refresh_path_combo()
@@ -879,8 +878,18 @@ def process_modification_file(source_mo, mod_path: str):
                 source_mo.append(t_entry)
 
 
-def is_valid_game_path(game_path: Path):
-    return game_path.joinpath('game_info.xml').is_file() and game_path.joinpath('bin').is_dir()
+def is_valid_game_path(game_path: Path) -> bool:
+    game_info_file = game_path.joinpath('game_info.xml')
+    if not game_info_file.is_file() or not game_path.joinpath('bin').is_dir():
+        return False
+    try:
+        game_info = ET.parse(game_info_file)
+        game_id = game_info.find('.//game/id')
+        if game_id is None:
+            return False
+        return 'WOWS' in game_id.text
+    except Exception:
+        return False
 
 
 def is_valid_build_dir(build_dir: Path) -> bool:
@@ -1370,8 +1379,9 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        half_screen_width = int(root.winfo_screenwidth() / 2) - 234
-        half_screen_height = int(root.winfo_screenheight() / 2) - 358
+        configure_font()
+        half_screen_width = int(root.winfo_screenwidth() / 2) - 235
+        half_screen_height = int(root.winfo_screenheight() / 2) - 317
         root.geometry(f'+{half_screen_width}+{half_screen_height}')
         app = LocalizationInstaller(root)
         root.mainloop()
@@ -1381,6 +1391,7 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
+        configure_font()
         scr_width = 800
         scr_height = 100
         half_screen_width = int((root.winfo_screenwidth() - scr_width) / 2)
@@ -1389,6 +1400,12 @@ def run():
         app = LocalizationInstallerAuto(root, options)
         root.mainloop()
         app.on_closed()
+
+
+def configure_font():
+    ttk.font.nametofont('TkDefaultFont').configure(family='SimHei')
+    ttk.font.nametofont('TkTextFont').configure(family='SimHei')
+    ttk.font.nametofont('TkFixedFont').configure(family='SimHei')
 
 
 if __name__ == '__main__':
