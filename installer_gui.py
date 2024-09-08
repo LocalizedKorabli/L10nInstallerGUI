@@ -195,7 +195,7 @@ class LocalizationInstallerAuto:
     def __init__(self, parent: tk.Tk, options: Any):
         self.no_gui = bool(options.no_gui)
         if self.no_gui:
-            parent.overrideredirect(1)
+            parent.overrideredirect(True)
             parent.withdraw()
         self.root = parent
         self.root.title(f'汉化安装器[自动更新模式]v{version}')
@@ -1379,9 +1379,9 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        configure_font()
-        half_screen_width = int(root.winfo_screenwidth() / 2) - 235
-        half_screen_height = int(root.winfo_screenheight() / 2) - 317
+        # configure_font()
+        half_screen_width = int(root.winfo_screenwidth() / 2) - 234
+        half_screen_height = int(root.winfo_screenheight() / 2) - 359
         root.geometry(f'+{half_screen_width}+{half_screen_height}')
         app = LocalizationInstaller(root)
         root.mainloop()
@@ -1391,7 +1391,7 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        configure_font()
+        # configure_font()
         scr_width = 800
         scr_height = 100
         half_screen_width = int((root.winfo_screenwidth() - scr_width) / 2)
