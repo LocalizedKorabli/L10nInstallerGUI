@@ -31,7 +31,7 @@ import zipfile
 from datetime import datetime
 from optparse import OptionParser
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, font
 from typing import Any, Dict, List, Tuple, Optional, Union
 
 import polib
@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.6'
+version = '0.1.7'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -458,7 +458,6 @@ class LocalizationInstaller:
         # 自动更新被勾选时，显示快捷方式生成目录选项
         self.gen_auto_update.trace('w', self.on_au_selected)
 
-        mkdir('l10n_installer/cache')
         mkdir('l10n_installer/downloads')
         mkdir('l10n_installer/mods')
         mkdir('l10n_installer/processed')
@@ -481,8 +480,8 @@ class LocalizationInstaller:
         self.game_launcher_status.set(find_launcher(self.get_game_path())[1])
 
     def reset_progress(self):
-        self.safely_set_download_progress_text('等待')
-        self.safely_set_install_progress_text('等待')
+        self.safely_set_download_progress_text('等待中')
+        self.safely_set_install_progress_text('等待中')
         self.safely_set_install_progress(progress=0.0)
 
     def safely_set_download_progress_text(self, msg: str):
@@ -855,11 +854,13 @@ def mkdir(t_dir: Any):
     os.makedirs(t_dir, exist_ok=True)
 
 
-def process_modification_file(source_mo, mod_path: str):
+def process_modification_file(source_mo, mod_path: str) -> None:
+    translated = None
     if mod_path.endswith('po'):
         translated = polib.pofile(mod_path)
-    else:
+    elif mod_path.endswith('mo'):
         translated = polib.mofile(mod_path)
+
     source_dict_singular = {entry.msgid: entry.msgstr for entry in source_mo if entry.msgid and entry.msgid != ''}
     translation_dict_singular = {entry.msgid: entry.msgstr for entry in translated if entry.msgid and entry.msgid != ''}
     singular_count = len(translation_dict_singular)
@@ -1008,6 +1009,7 @@ def _install_update(
                     target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath(
                         'res_mods' if is_release else 'res')
                     with zipfile.ZipFile(output_file, 'r') as mo_zip:
+                        process_possible_gbk_zip(mo_zip)
                         mo_zip.extractall(target_path)
                 if full_gui:
                     gui.safely_set_install_progress_text('安装体验增强包——完成')
@@ -1052,6 +1054,7 @@ def _install_update(
             mkdir(extracted_path)
             info_fetched = False
             with zipfile.ZipFile(fetched_file, 'r') as mo_zip:
+                process_possible_gbk_zip(mo_zip)
                 info_files = [info for info in mo_zip.filelist if info.filename.split('/')[-1] == 'version.info']
                 if info_files:
                     info_file_name = info_files[0].filename
@@ -1075,6 +1078,9 @@ def _install_update(
                 gui.safely_set_download_progress_text('下载汉化包——完成')
             mods = get_mods(use_mods, game_path if isolation else Path('.'))
             fetched_file = parse_and_apply_mods(gui, fetched_file, mods, execution_time)
+            cache_path = 'l10n_installer/cache'
+            if os.path.isdir(cache_path):
+                shutil.rmtree(cache_path)
             if fetched_file == '':
                 if full_gui:
                     gui.safely_set_install_progress_text('安装汉化包——文件损坏')
@@ -1205,9 +1211,34 @@ def get_mods(mods_selection: bool, instance_dir: Path) -> List[str]:
     mods_dir = instance_dir.joinpath('l10n_installer').joinpath('mods')
     if not mods_dir.is_dir():
         return []
-    files = os.listdir(mods_dir)
-    return [str(mods_dir.joinpath(str(file)).absolute())
-            for file in files if (str(file).endswith('.po') or str(file).endswith('.mo'))]
+    file_list = []
+    extracted_list = []
+    mkdir('l10n_installer/cache')
+    for root0, _, files0 in os.walk(mods_dir):
+        for name0 in files0:
+            if name0.endswith(('.mo', '.po')):
+                file_list.append(os.path.abspath(os.path.join(root0, name0)))
+            elif name0.endswith('.zip'):
+                try:
+                    mod_name = os.path.basename(name0).replace('.zip', '')
+                    extracted_cache = f'l10n_installer/cache/{mod_name}'
+                    with zipfile.ZipFile(os.path.join(root0, name0), 'r') as mod_zip:
+                        process_possible_gbk_zip(mod_zip)
+                        mod_files = [mod_file for mod_file in mod_zip.filelist if
+                                     mod_file.filename.split('/')[-1].endswith(('.mo', '.po'))]
+                        for mod_file in mod_files:
+                            mod_zip.extract(mod_file, extracted_cache)
+
+                    extracted_list.append(extracted_cache)
+                except Exception as ex:
+                    print(ex)
+        for extracted_cache in extracted_list:
+            for root1, _, files1 in os.walk(extracted_cache):
+                for name1 in files1:
+                    if name1.endswith(('.mo', '.po')):
+                        file_list.append(os.path.abspath(os.path.join(root1, name1)))
+
+    return file_list
 
 
 def parse_and_apply_mods(gui: Union[LocalizationInstaller, LocalizationInstallerAuto], downloaded_mo: str,
@@ -1380,7 +1411,7 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        # configure_font()
+        configure_font()
         half_screen_width = int(root.winfo_screenwidth() / 2) - 234
         half_screen_height = int(root.winfo_screenheight() / 2) - 359
         root.geometry(f'+{half_screen_width}+{half_screen_height}')
@@ -1392,7 +1423,7 @@ def run():
         icon = os.path.join(resource_path, 'icon.ico')
         root.iconbitmap(default=icon)
         root.iconbitmap(bitmap=icon)
-        # configure_font()
+        configure_font()
         scr_width = 800
         scr_height = 100
         half_screen_width = int((root.winfo_screenwidth() - scr_width) / 2)
@@ -1404,9 +1435,32 @@ def run():
 
 
 def configure_font():
-    ttk.font.nametofont('TkDefaultFont').configure(family='SimHei')
-    ttk.font.nametofont('TkTextFont').configure(family='SimHei')
-    ttk.font.nametofont('TkFixedFont').configure(family='SimHei')
+    font_list = list(font.families())
+    if 'SimHei' in font_list:
+        do_configure_font('SimHei')
+    elif '黑体' in font_list:
+        do_configure_font('黑体')
+    elif 'DengXian' in font_list:
+        do_configure_font('DengXian')
+    elif '等线' in font_list:
+        do_configure_font('等线')
+
+
+def do_configure_font(family: str):
+    ttk.font.nametofont('TkDefaultFont').configure(family=family)
+    ttk.font.nametofont('TkTextFont').configure(family=family)
+    ttk.font.nametofont('TkFixedFont').configure(family=family)
+
+
+def process_possible_gbk_zip(zip_file: zipfile.ZipFile):
+    name_to_info = zip_file.NameToInfo
+    for name, info in name_to_info.copy().items():
+        real_name = name.encode('cp437').decode('gbk')
+        if real_name != name:
+            info.filename = real_name
+            del name_to_info[name]
+            name_to_info[real_name] = info
+    return zip_file
 
 
 if __name__ == '__main__':
