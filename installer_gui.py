@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.7'
+version = '0.1.8'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -154,7 +154,9 @@ tooltip_ee_selection = '''体验增强包以战舰世界模组形式
 
 tooltip_mods_selection = '''模组（汉化修改包）允许用户
 对汉化文件做局部修改，
-以获得更好的游戏体验。'''
+以获得更好的游戏体验。
+与澪刻安装器联动的模组
+需要您打开此选项。'''
 
 tooltip_isolation = '''在版本隔离被启用的情况下，
 程序将从游戏目录下的l10n_installer/mods
@@ -1076,7 +1078,7 @@ def _install_update(
         if nothing_wrong:
             if full_gui:
                 gui.safely_set_download_progress_text('下载汉化包——完成')
-            mods = get_mods(use_mods, game_path if isolation else Path('.'))
+            mods = get_mods(use_mods, game_path, run_dir, game_path if isolation else Path('.'))
             fetched_file = parse_and_apply_mods(gui, fetched_file, mods, execution_time)
             cache_path = 'l10n_installer/cache'
             if os.path.isdir(cache_path):
@@ -1205,15 +1207,26 @@ def compare_with_local(remote_version: str, local_versions: Optional[List[str]])
     return True
 
 
-def get_mods(mods_selection: bool, instance_dir: Path) -> List[str]:
+def get_mods(mods_selection: bool, game_path: Path, run_dir: str, instance_dir: Path) -> List[str]:
     if not mods_selection:
         return []
-    mods_dir = instance_dir.joinpath('l10n_installer').joinpath('mods')
-    if not mods_dir.is_dir():
+    installer_mods_dir = instance_dir.joinpath('l10n_installer').joinpath('mods')
+    compat_mods_dir_0 = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods') \
+        .joinpath('texts').joinpath('l10n_mods')
+    compat_mods_dir_1 = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods') \
+        .joinpath('texts').joinpath('mods')
+    if not installer_mods_dir.is_dir() and not compat_mods_dir_0.is_dir() and not compat_mods_dir_1.is_dir():
         return []
     file_list = []
-    extracted_list = []
     mkdir('l10n_installer/cache')
+    scan_mods(file_list, installer_mods_dir)
+    scan_mods(file_list, compat_mods_dir_0)
+    scan_mods(file_list, compat_mods_dir_1)
+    return file_list
+
+
+def scan_mods(file_list: List[str], mods_dir: Path) -> None:
+    extracted_list = []
     for root0, _, files0 in os.walk(mods_dir):
         for name0 in files0:
             if name0.endswith(('.mo', '.po')):
@@ -1237,8 +1250,6 @@ def get_mods(mods_selection: bool, instance_dir: Path) -> List[str]:
                 for name1 in files1:
                     if name1.endswith(('.mo', '.po')):
                         file_list.append(os.path.abspath(os.path.join(root1, name1)))
-
-    return file_list
 
 
 def parse_and_apply_mods(gui: Union[LocalizationInstaller, LocalizationInstallerAuto], downloaded_mo: str,
