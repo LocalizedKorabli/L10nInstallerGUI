@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.8'
+version = '0.1.9'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -729,6 +729,7 @@ class LocalizationInstaller:
         release = '--release' if self.is_release.get() else ''
         ee = '--ee' if self.ee_selection.get() else ''
         mods = '--mods' if self.mods_selection.get() else ''
+        isolation = '--isolation' if self.isolation.get() else ''
         region = self.server_region.get()
 
         pythoncom.CoInitialize()
@@ -736,7 +737,8 @@ class LocalizationInstaller:
             link.path = str(sys.executable)
             link.description = '自动更新汉化并启动战舰世界'
             link.icon_location = str(Path(game_path).joinpath('WorldOfWarships.exe').absolute()), 0
-            link.arguments = f'--auto --gamepath "{game_path}" {release} {ee} {mods} --region {region} --src "{src}"'
+            link.arguments = f'--auto --gamepath "{game_path}" {release} {ee} {mods} {isolation} ' \
+                             f'--region {region} --src "{src}"'
         pythoncom.CoUninitialize()
 
     def get_choice_template(self):
@@ -1057,7 +1059,7 @@ def _install_update(
             info_fetched = False
             with zipfile.ZipFile(fetched_file, 'r') as mo_zip:
                 process_possible_gbk_zip(mo_zip)
-                info_files = [info for info in mo_zip.filelist if info.filename.split('/')[-1] == 'version.info']
+                info_files = [info for info in mo_zip.filelist if info.filename.endswith('version.info')]
                 if info_files:
                     info_file_name = info_files[0].filename
                     mo_zip.extract(info_file_name, info_path)
