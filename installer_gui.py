@@ -1,5 +1,5 @@
 # Korabli Localization Installer GUI
-# Copyright © 2024 LocalizedKorabli
+# Copyright © 2024 澪刻LocalizedKorabli
 #
 # This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General
 # Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option)
@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.1.9'
+version = '0.2.0'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -172,7 +172,7 @@ tooltip_au = '''若自动更新选项被勾选，在汉化安装成功后，
 
 tooltip_launch_game = '启动战舰世界客户端'
 
-tooltip_about = '查看LocalizedKorabli汉化托管仓库'
+tooltip_about = '查看澪刻汉化托管仓库'
 
 tooltip_source_code = '查看本安装器代码仓库'
 
@@ -446,7 +446,7 @@ class LocalizationInstaller:
         ToolTip(self.src_button, tooltip_source_code, delay=1.0)
 
         # 版权声明
-        self.license_text = ttk.Label(parent, text='© 2024 LocalizedKorabli')
+        self.license_text = ttk.Label(parent, text='© 2024 澪刻本地化')
         self.license_text.grid(row=17, column=2, columnspan=3, pady=5)
         ToolTip(self.license_text, tooltip_license, delay=1.0)
 
@@ -1047,12 +1047,10 @@ def _install_update(
     if not fetched_file:
         Messagebox.show_error('选择本地文件作为汉化来源时，\n请手动启动安装器进行安装。')
         return False
-    execution_time = str(time.time_ns())
     for run_dir in run_dirs:
+        execution_time = str(time.time_ns())
         target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
-        info_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('l10n')
-        mkdir(info_path)
-        version_info_file = info_path.joinpath('version.info')
+        version_info_file: Optional[Path] = None
         if fetched_file.endswith('.zip'):
             extracted_path = Path('l10n_installer').joinpath('downloads').joinpath('extracted_mo')
             mkdir(extracted_path)
@@ -1062,14 +1060,15 @@ def _install_update(
                 info_files = [info for info in mo_zip.filelist if info.filename.endswith('version.info')]
                 if info_files:
                     info_file_name = info_files[0].filename
-                    mo_zip.extract(info_file_name, info_path)
+                    mo_zip.extract(info_file_name, extracted_path)
+                    version_info_file = extracted_path.joinpath(info_file_name)
                     info_fetched = True
                 mo_files = [mo for mo in mo_zip.filelist if mo.filename.endswith('.mo')]
                 if mo_files:
                     mo_file_name = mo_files[0].filename
                     mo_zip.extract(mo_file_name, extracted_path)
                     fetched_file = os.path.join(extracted_path, mo_file_name)
-            if info_fetched and version_info_file.is_file():
+            if info_fetched and version_info_file and version_info_file.is_file():
                 with open(version_info_file, 'r', encoding='utf-8') as f:
                     remote_version = f.readline()
         if not fetched_file.endswith('.mo') or not os.path.isfile(fetched_file):
@@ -1101,6 +1100,9 @@ def _install_update(
                 if not os.path.isfile(old_mo_backup) and os.path.isfile(old_mo):
                     shutil.copy(old_mo, old_mo_backup)
             shutil.copy(fetched_file, old_mo)
+
+            info_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('l10n')
+            mkdir(info_path)
             installation_info_file = info_path.joinpath('installation.info')
             with open(installation_info_file, 'w', encoding='utf-8') as f:
                 f.writelines([
