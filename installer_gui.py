@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.2.0'
+version = '0.2.1'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -858,30 +858,109 @@ def mkdir(t_dir: Any):
     os.makedirs(t_dir, exist_ok=True)
 
 
-def process_modification_file(source_mo, mod_path: str) -> None:
+def process_modification_file(source_mo, mod_path: str,
+                              json_mods_d: Dict[str, Union[str, List[str]]], json_mods_m: Dict[str, str]) -> bool:
     translated = None
+    is_json_mod = False
     if mod_path.endswith('po'):
         translated = polib.pofile(mod_path)
     elif mod_path.endswith('mo'):
         translated = polib.mofile(mod_path)
+    elif mod_path.endswith('l10nmod') or mod_path.endswith('json'):
+        is_json_mod = True
 
-    source_dict_singular = {entry.msgid: entry.msgstr for entry in source_mo if entry.msgid and entry.msgid != ''}
-    translation_dict_singular = {entry.msgid: entry.msgstr for entry in translated if entry.msgid and entry.msgid != ''}
-    singular_count = len(translation_dict_singular)
-    for entry in source_mo:
-        if singular_count == 0:
-            break
-        if entry.msgid and entry.msgid in translation_dict_singular:
-            target_str = translation_dict_singular[entry.msgid]
-            del translation_dict_singular[entry.msgid]
-            singular_count -= 1
-            if entry.msgid == 'IDS_RIGHTS_RESERVED':
+    if translated:
+        translation_dict_singular: Dict[str, polib.MOEntry] = {entry.msgid: entry for entry in translated if
+                                                               entry.msgid and not entry.msgid_plural}
+        translation_dict_plural: Dict[str, polib.MOEntry] = {entry.msgid: entry for entry in translated if
+                                                             entry.msgid and entry.msgid_plural}
+        singular_count = len(translation_dict_singular)
+        plural_count = len(translation_dict_plural)
+        for entry in source_mo:
+            if not entry.msgid:
                 continue
-            entry.msgstr = target_str
-    if singular_count > 0:
-        for t_entry in translated:
-            if t_entry.msgid and t_entry.msgid not in source_dict_singular:
-                source_mo.append(t_entry)
+            if singular_count == 0 and plural_count == 0:
+                break
+            if entry.msgid_plural and entry.msgid_plural in translation_dict_plural:
+                target_strs = translation_dict_plural[entry.msgid].msgstr_plural
+                del translation_dict_plural[entry.msgid]
+                plural_count -= 1
+                entry.msgstr_plural = target_strs
+            elif entry.msgid and entry.msgid in translation_dict_singular:
+                target_str = translation_dict_singular[entry.msgid].msgstr
+                del translation_dict_singular[entry.msgid]
+                singular_count -= 1
+                if entry.msgid == 'IDS_RIGHTS_RESERVED':
+                    continue
+                entry.msgstr = target_str
+        if singular_count > 0 or plural_count > 0:
+            for s_e in translation_dict_singular:
+                source_mo.append(translation_dict_singular[s_e])
+            for p_e in translation_dict_plural:
+                source_mo.append(translation_dict_plural[p_e])
+    elif is_json_mod:
+        try:
+            with open(mod_path, 'r', encoding='utf-8') as f:
+                json_mod = json.load(f)
+            append_json_mod(json_mod, json_mods_d, json_mods_m)
+        except Exception:
+            pass
+    return translated or is_json_mod
+
+
+def append_json_mod(json_mod: Dict[str, Any],
+                    json_mods_d: Dict[str, Union[str, List[str]]], json_mods_m: Dict[str, str]):
+    if 'replace' in json_mod.keys():
+        replaces = json_mod.get('replace')
+        if isinstance(replaces, Dict):
+            for r_k in replaces.keys():
+                r_v = replaces[r_k]
+                if isinstance(r_v, str) or isinstance(r_v, List):
+                    json_mods_d[r_k] = r_v
+    if 'words' in json_mod.keys():
+        words = json_mod.get('words')
+        if isinstance(words, Dict):
+            for w_k in words.keys():
+                w_v = words[w_k]
+                if isinstance(w_v, str):
+                    json_mods_m[w_k] = w_v
+
+
+def process_json_mods(source_mo, json_mods_d_replace: Dict[str, Union[str, List[str]]],
+                      json_mods_m_replace: Dict[str, str]):
+    for entry in source_mo:
+        if not entry.msgid:
+            continue
+        if entry.msgid_plural:
+            for m_k in json_mods_m_replace:
+                m_v = json_mods_m_replace[m_k]
+                msgstrs: Dict[int, str] = entry.msgstr_plural
+                should_modify = False
+                for i in msgstrs.keys():
+                    if m_k in msgstrs.get(i):
+                        msgstrs[i] = msgstrs.get(i).replace(m_k, m_v)
+                        should_modify = True
+                if should_modify:
+                    entry.msgstr_plural = msgstrs
+            for d_k in json_mods_d_replace:
+                if entry.msgid == d_k:
+                    target_text = json_mods_d_replace[d_k]
+                    if isinstance(target_text, str):
+                        list_l = len(entry.msgstr_plural)
+                        entry.msgstr_plural = {i: target_text for i in range(list_l)}
+                    elif isinstance(target_text, List):
+                        entry.msgstr_plural = {i: target_text[i] for i in range(len(target_text))}
+        else:
+            for m_k in json_mods_m_replace:
+                m_v = json_mods_m_replace[m_k]
+                msgstr = entry.msgstr
+                if m_k in msgstr:
+                    entry.msgstr = msgstr.replace(m_k, m_v)
+            for d_k in json_mods_d_replace:
+                if entry.msgid == d_k:
+                    target_text = json_mods_d_replace[d_k]
+                    if isinstance(target_text, str):
+                        entry.msgstr = target_text
 
 
 def is_valid_game_path(game_path: Path) -> bool:
@@ -991,7 +1070,7 @@ def _install_update(
             try:
                 response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
                                         '/BuiltInMods/LKExperienceEnhancement.zip', stream=True,
-                                        proxies=proxies, timeout=10000)
+                                        proxies=proxies, timeout=5000)
                 status = response.status_code
                 if status == 200:
                     if full_gui:
@@ -1045,8 +1124,13 @@ def _install_update(
             fetched_file = gui.mo_path.get()
         remote_version = 'local'
     if not fetched_file:
+        if full_gui:
+            gui.safely_set_install_progress(0.0)
+            gui.safely_set_install_progress_text('安装汉化包——文件异常')
         Messagebox.show_error('选择本地文件作为汉化来源时，\n请手动启动安装器进行安装。')
         return False
+    dir_total = len(run_dirs)
+    dir_progress = 1
     for run_dir in run_dirs:
         execution_time = str(time.time_ns())
         target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
@@ -1080,7 +1164,7 @@ def _install_update(
             if full_gui:
                 gui.safely_set_download_progress_text('下载汉化包——完成')
             mods = get_mods(use_mods, game_path, run_dir, game_path if isolation else Path('.'))
-            fetched_file = parse_and_apply_mods(gui, fetched_file, mods, execution_time)
+            fetched_file = parse_and_apply_mods(gui, fetched_file, mods, execution_time, dir_progress, dir_total)
             cache_path = 'l10n_installer/cache'
             if os.path.isdir(cache_path):
                 shutil.rmtree(cache_path)
@@ -1091,7 +1175,7 @@ def _install_update(
                 break
         if nothing_wrong:
             if full_gui:
-                gui.safely_set_install_progress_text('安装汉化包——正在移动文件')
+                gui.safely_set_install_progress_text(f'安装汉化包——移动文件({dir_progress}/{dir_total})')
             mo_dir = target_path.joinpath('texts').joinpath(server_region).joinpath('LC_MESSAGES')
             mkdir(mo_dir)
             old_mo = mo_dir.joinpath('global.mo')
@@ -1116,6 +1200,7 @@ def _install_update(
                     float(remote_version)
                 except ValueError:
                     f.write(f'\n{time.time()}')
+        dir_progress += 1
     if full_gui:
         gui.is_installing = False
     if nothing_wrong:
@@ -1143,7 +1228,7 @@ def check_version_and_fetch_mo(
     if full_gui:
         gui.safely_set_download_progress_text('下载汉化包——获取版本')
     try:
-        response = requests.get(download_link_base + 'version.info', stream=True, proxies=proxies)
+        response = requests.get(download_link_base + 'version.info', stream=True, proxies=proxies, timeout=5000)
         status = response.status_code
         if status == 200:
             info_file = 'l10n_installer/downloads/version.info'
@@ -1233,7 +1318,7 @@ def scan_mods(file_list: List[str], mods_dir: Path) -> None:
     extracted_list = []
     for root0, _, files0 in os.walk(mods_dir):
         for name0 in files0:
-            if name0.endswith(('.mo', '.po')):
+            if name0.endswith(('.mo', '.po', '.json', '.l10nmod')):
                 file_list.append(os.path.abspath(os.path.join(root0, name0)))
             elif name0.endswith('.zip'):
                 try:
@@ -1242,7 +1327,7 @@ def scan_mods(file_list: List[str], mods_dir: Path) -> None:
                     with zipfile.ZipFile(os.path.join(root0, name0), 'r') as mod_zip:
                         process_possible_gbk_zip(mod_zip)
                         mod_files = [mod_file for mod_file in mod_zip.filelist if
-                                     mod_file.filename.split('/')[-1].endswith(('.mo', '.po'))]
+                                     mod_file.filename.split('/')[-1].endswith(('.mo', '.po', '.json', '.l10nmod'))]
                         for mod_file in mod_files:
                             mod_zip.extract(mod_file, extracted_cache)
 
@@ -1252,13 +1337,15 @@ def scan_mods(file_list: List[str], mods_dir: Path) -> None:
         for extracted_cache in extracted_list:
             for root1, _, files1 in os.walk(extracted_cache):
                 for name1 in files1:
-                    if name1.endswith(('.mo', '.po')):
+                    if name1.endswith(('.mo', '.po', '.json', '.l10nmod')):
                         file_list.append(os.path.abspath(os.path.join(root1, name1)))
 
 
 def parse_and_apply_mods(gui: Union[LocalizationInstaller, LocalizationInstallerAuto], downloaded_mo: str,
                          mods: List[str],
-                         execution_time: str) -> str:
+                         execution_time: str,
+                         dir_progress: int,
+                         dir_total: int) -> str:
     full_gui = isinstance(gui, LocalizationInstaller)
     try:
         downloaded_mo_instance = polib.mofile(downloaded_mo)
@@ -1269,18 +1356,25 @@ def parse_and_apply_mods(gui: Union[LocalizationInstaller, LocalizationInstaller
         gui.safely_set_install_progress(90.0)
         return downloaded_mo
     if full_gui:
-        gui.safely_set_install_progress_text('安装汉化包——正在应用模组')
+        gui.safely_set_install_progress_text(f'安装汉化包——应用模组({str(dir_progress)}/{str(dir_total)})')
     modded_file_name = f'l10n_installer/processed/modified_{execution_time}.mo'
     if os.path.isfile(modded_file_name):
         return modded_file_name
     applied_mods = 0
+    json_mods_d_replace: Dict[str, Union[str, List[str]]] = {}
+    json_mods_m_replace: Dict[str, str] = {}
     for mod in mods:
         try:
-            process_modification_file(downloaded_mo_instance, mod)
+            applied = process_modification_file(downloaded_mo_instance, mod, json_mods_d_replace, json_mods_m_replace)
         except Exception:
             pass
-        applied_mods += 1
-        gui.safely_set_install_progress(30.0 + 60.0 * applied_mods / mods_count)
+        if applied:
+            applied_mods += 1
+            gui.safely_set_install_progress(
+                30.0 + 60.0 * ((dir_progress - 1) / dir_total + applied_mods / (mods_count * dir_total))
+            )
+    process_json_mods(downloaded_mo_instance, json_mods_d_replace, json_mods_m_replace)
+
     for file in os.listdir('l10n_installer/processed/'):
         try:
             os.remove(file)
@@ -1292,7 +1386,7 @@ def parse_and_apply_mods(gui: Union[LocalizationInstaller, LocalizationInstaller
 
 def download_mo_from_remote(download_link: str, output_file: str, proxies: Dict) -> str:
     try:
-        response = requests.get(download_link, stream=True, proxies=proxies)
+        response = requests.get(download_link, stream=True, proxies=proxies, timeout=5000)
         status = response.status_code
         if status == 200:
             with open(output_file, 'wb') as f:
