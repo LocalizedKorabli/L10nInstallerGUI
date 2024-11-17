@@ -46,14 +46,14 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.2.1'
+version = '0.2.2'
 
 locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
     <text_path>../res/texts</text_path>
     <text_domain>global</text_domain>
     <lang_mapping>
-        <lang acceptLang="ru" egs="ru" fonts="CN" full="schinese" languageBar="true" localeRfcName="ru" short="ru" />
+        <lang acceptLang="ru" egs="ru" fonts="CN" full="russian" languageBar="true" localeRfcName="ru" short="ru" />
     </lang_mapping>
 </locale_config>
 '''
@@ -103,7 +103,8 @@ server_regions_dict: Dict[str, Tuple[str, bool]] = {
 launcher_dict: Dict[str, str] = {
     'lgc_api.exe': '莱服客户端',
     'wgc_api.exe': '直营服客户端',
-    'wgc360_api.exe': '国服客户端'
+    'wgc360_api.exe': '国服客户端',
+    'steam_api64.dll': 'Steam客户端'
 }
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
@@ -149,8 +150,8 @@ tooltip_src_local = '选择本地汉化包'
 tooltip_mo_path_selection = '手动选择要安装的汉化包文件'
 
 tooltip_ee_selection = '''体验增强包以战舰世界模组形式
-提供了一些视觉修改，如中文开屏logo、
-解除战斗载入界面战舰名称字数显示限制等'''
+提供了一些修复，如微软拼音输入法修复；
+和一些视觉修改，如中文开屏logo、'''
 
 tooltip_mods_selection = '''模组（汉化修改包）允许用户
 对汉化文件做局部修改，
@@ -200,7 +201,7 @@ class LocalizationInstallerAuto:
             parent.overrideredirect(True)
             parent.withdraw()
         self.root = parent
-        self.root.title(f'汉化安装器[自动更新模式]v{version}')
+        self.root.title(f'澪刻·汉化安装器[自动更新模式]v{version}')
         self.no_run = bool(options.no_run)
         self.game_path = Path(options.game_path)
         self.is_release = bool(options.is_release)
@@ -243,7 +244,7 @@ class LocalizationInstallerAuto:
 
     def on_closed(self):
         if not self.no_run:
-            subprocess.run(find_launcher(self.game_path)[0])
+            run_launcher(find_launcher(self.game_path)[0])
 
 
 class LocalizationInstaller:
@@ -277,7 +278,7 @@ class LocalizationInstaller:
 
     def __init__(self, parent: tk.Tk):
         self.root = parent
-        self.root.title(f'汉化安装器v{version}')
+        self.root.title(f'澪刻·汉化安装器v{version}')
 
         self.game_path = tk.StringVar()
         self.localization_status_1st = tk.StringVar()
@@ -532,8 +533,8 @@ class LocalizationInstaller:
             return
 
         self.detect_game_status()
-        parse_game_version(self, self.get_game_path())
-        self.game_launcher_file = find_launcher(self.get_game_path())[0]
+        parse_game_version(self, game_path)
+        self.game_launcher_file = find_launcher(game_path)[0]
 
         mkdir(game_path.joinpath('l10n_installer/settings'))
         mkdir(game_path.joinpath('l10n_installer/mods'))
@@ -639,6 +640,16 @@ class LocalizationInstaller:
                 Path(drive).joinpath('Games').joinpath('Korabli_PT'),
                 Path(drive).joinpath('Korabli'),
                 Path(drive).joinpath('Korabli_PT'),
+                Path(drive).joinpath('Program Files (x86)').joinpath('Steam')
+                        .joinpath('steamapps').joinpath('common').joinpath('Korabli'),
+                Path(drive).joinpath('Program Files (x86)').joinpath('Steam')
+                        .joinpath('steamapps').joinpath('common').joinpath('Korabli_PT'),
+                Path(drive).joinpath('Program Files').joinpath('Steam')
+                        .joinpath('steamapps').joinpath('common').joinpath('Korabli'),
+                Path(drive).joinpath('Program Files').joinpath('Steam')
+                        .joinpath('steamapps').joinpath('common').joinpath('Korabli_PT'),
+                Path(drive).joinpath('SteamLibrary').joinpath('steamapps').joinpath('common').joinpath('Korabli'),
+                Path(drive).joinpath('SteamLibrary').joinpath('steamapps').joinpath('common').joinpath('Korabli_PT')
             ]:
                 if is_valid_game_path(possible_path):
                     found_manually.append(possible_path)
@@ -736,10 +747,25 @@ class LocalizationInstaller:
         with winshell.shortcut(str(self.get_au_shortcut_path().absolute())) as link:
             link.path = str(sys.executable)
             link.description = '自动更新汉化并启动战舰世界'
-            link.icon_location = str(Path(game_path).joinpath('WorldOfWarships.exe').absolute()), 0
+            icon_location = self.get_shortcut_icon_location(Path(game_path))
+            if icon_location is not None:
+                link.icon_location = icon_location
             link.arguments = f'--auto --gamepath "{game_path}" {release} {ee} {mods} {isolation} ' \
                              f'--region {region} --src "{src}"'
         pythoncom.CoUninitialize()
+
+    def get_shortcut_icon_location(self, game_path: Path) -> Optional[Tuple[str, int]]:
+        if not game_path.is_dir():
+            return None
+        game_file = game_path.joinpath('Korabli.exe')
+        if game_file.is_file():
+            return str(game_file.absolute()), 0
+        else:
+            game_file = game_path.joinpath('WorldOfWarships.exe')
+            if game_file.is_file():
+                return str(game_file.absolute()), 0
+            else:
+                return None
 
     def get_choice_template(self):
         self.detect_game_status()
@@ -769,14 +795,30 @@ class LocalizationInstaller:
             return
         game_info_file = game_path.joinpath('game_info.xml')
         if not game_info_file.is_file():
+            self.detect_steam_game_status(game_path)
             return
         game_info = ET.parse(game_info_file)
         game_id = game_info.find('.//game/id')
         if game_id is None:
             return
-        game_type: (str, bool) = server_regions_dict.get(game_id.text, ('ru', 'PT.PRODUCTION' not in game_id.text))
+        game_type: (str, bool) = server_regions_dict.get(
+            game_id.text,
+            # By default RU
+            ('ru', 'PT.PRODUCTION' not in game_id.text)
+        )
         self.server_region.set(game_type[0])
         self.is_release.set(game_type[1])
+
+    def detect_steam_game_status(self, game_path: Path):
+        if not game_path.joinpath('steam_api64.dll').is_file():
+            return
+        if game_path.joinpath('Korabli.exe').is_file():
+            self.server_region.set('ru')
+            self.is_release.set(True)
+            return
+        if game_path.joinpath('WorldOfWarships.exe').is_file():
+            self.server_region.set('wg')
+            self.is_release.set(True)
 
     def launch_game(self) -> None:
         if not self.game_launcher_file or not self.game_launcher_file.is_file():
@@ -784,7 +826,7 @@ class LocalizationInstaller:
         if not self.game_launcher_file or not self.game_launcher_file.is_file():
             Messagebox.show_warning('未找到客户端！', '启动游戏')
             return
-        subprocess.run(self.game_launcher_file)
+        run_launcher(self.game_launcher_file)
 
     def parse_global_settings(self):
         if self.global_settings:
@@ -966,7 +1008,8 @@ def process_json_mods(source_mo, json_mods_d_replace: Dict[str, Union[str, List[
 def is_valid_game_path(game_path: Path) -> bool:
     game_info_file = game_path.joinpath('game_info.xml')
     if not game_info_file.is_file() or not game_path.joinpath('bin').is_dir():
-        return False
+        # For Steam Clients
+        return game_path.joinpath('steam_api64.dll').is_file() and game_path.joinpath('bin').is_dir()
     try:
         game_info = ET.parse(game_info_file)
         game_id = game_info.find('.//game/id')
@@ -1127,6 +1170,7 @@ def _install_update(
         if full_gui:
             gui.safely_set_install_progress(0.0)
             gui.safely_set_install_progress_text('安装汉化包——文件异常')
+            gui.is_installing = False
         Messagebox.show_error('选择本地文件作为汉化来源时，\n请手动启动安装器进行安装。')
         return False
     dir_total = len(run_dirs)
@@ -1492,6 +1536,25 @@ def find_launcher(game_path: Optional[Path]) -> (Optional[Path], str):
             if launcher_file.is_file():
                 return launcher_file, launcher_dict.get(launcher)
     return None, '未找到客户端'
+
+
+def run_launcher(launcher_file: Optional[Path]) -> None:
+    if not launcher_file:
+        return
+    path_text = str(launcher_file.absolute())
+    if path_text.endswith('.exe'):
+        subprocess.run(launcher_file)
+    elif path_text.endswith('.dll'):
+        parent_path = launcher_file.parent
+        if not parent_path.is_dir():
+            return
+        target_executable = parent_path.joinpath('WorldOfWarships.exe')
+        if target_executable.is_file():
+            subprocess.run(target_executable)
+        else:
+            target_executable = parent_path.joinpath('Korabli.exe')
+            if target_executable.is_file():
+                subprocess.run(target_executable)
 
 
 def is_admin():
