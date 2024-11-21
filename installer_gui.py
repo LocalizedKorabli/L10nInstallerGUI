@@ -46,9 +46,9 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.2.2'
+version = '0.2.3'
 
-locale_config = '''<locale_config>
+builtin_locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
     <text_path>../res/texts</text_path>
     <text_domain>global</text_domain>
@@ -56,6 +56,16 @@ locale_config = '''<locale_config>
         <lang acceptLang="ru" egs="ru" fonts="CN" full="russian" languageBar="true" localeRfcName="ru" short="ru" />
     </lang_mapping>
 </locale_config>
+'''
+
+builtin_paths_xml = r'''<root>
+    <Paths>
+        <Path>..\res_mods</Path>
+        <Path key="15b8d" packages="..\..\..\res_packages" type="PFS">..\idx</Path>
+        <Path key="35d52">..\res</Path>
+        <Path key="77ee7" type="DLC">..\res_dlc</Path>
+    </Paths>
+</root>
 '''
 
 download_routes = {
@@ -455,7 +465,7 @@ class LocalizationInstaller:
         self.download_source.trace('w', self.on_download_source_changed)
         # 更换游戏路径时，刷新数据
         self.game_path.trace('w', self.on_game_path_changed)
-        # 非莱斯塔正式服客户端无需安装体验增强包
+        # 非莱斯塔服客户端无需安装体验增强包
         self.server_region.trace('w', self.on_server_region_or_game_type_changed)
         self.is_release.trace('w', self.on_server_region_or_game_type_changed)
         # 自动更新被勾选时，显示快捷方式生成目录选项
@@ -577,7 +587,8 @@ class LocalizationInstaller:
         return Path(shortcut_str)
 
     def supports_ee(self):
-        return self.server_region.get() == 'ru' and self.is_release.get()
+        # return self.server_region.get() == 'ru' and self.is_release.get()
+        return self.server_region.get() == 'ru'
 
     def find_game(self, overwrite: bool = True) -> Optional[Path]:
         found_in_reg = self.find_from_reg()
@@ -1080,67 +1091,67 @@ def _install_update(
             Messagebox.show_error('未发现游戏版本，无法更新汉化。', '自动更新')
         return False
     for run_dir in run_dirs:
-        target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
+        build_path = game_path.joinpath('bin').joinpath(run_dir)
+        fix_paths(build_path.joinpath('bin64'))
+        target_path = build_path.joinpath('res_mods')
         mkdir(target_path)
         if full_gui:
             gui.safely_set_install_progress_text('安装locale_config')
-        if not is_release:
-            old_cfg = target_path.joinpath('locale_config.xml')
-            old_cfg_backup = target_path.joinpath('locale_config.xml.old')
-            if not os.path.isfile(old_cfg_backup) and os.path.isfile(old_cfg):
-                shutil.copy(old_cfg, old_cfg_backup)
-            with open(old_cfg, 'w', encoding='utf-8') as file:
-                file.write(locale_config)
-        else:
-            with open(target_path.joinpath('locale_config.xml'), 'w', encoding='utf-8') as file:
-                file.write(locale_config)
+        # if not is_release:
+        #     old_cfg = target_path.joinpath('locale_config.xml')
+        #     old_cfg_backup = target_path.joinpath('locale_config.xml.old')
+        #     if not os.path.isfile(old_cfg_backup) and os.path.isfile(old_cfg):
+        #         shutil.copy(old_cfg, old_cfg_backup)
+        #     with open(old_cfg, 'w', encoding='utf-8') as file:
+        #         file.write(locale_config)
+        # else:
+        with open(target_path.joinpath('locale_config.xml'), 'w', encoding='utf-8') as file:
+            file.write(builtin_locale_config)
     gui.safely_set_install_progress(progress=20.0)
     if full_gui:
         gui.safely_set_install_progress_text('安装locale_config——完成')
 
     proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
 
-    if is_release:
-        # EE
+    # EE
+    if full_gui:
+        use_ee = gui.supports_ee() and gui.ee_selection.get()
+    if use_ee:
         if full_gui:
-            use_ee = gui.supports_ee() and gui.ee_selection.get()
-        if use_ee:
-            if full_gui:
-                gui.safely_set_install_progress_text('安装体验增强包')
-                gui.safely_set_download_progress_text('下载体验增强包——连接中')
-            output_file = Path('l10n_installer').joinpath('downloads').joinpath('LK_EE.zip')
-            ee_ready = False
-            try:
-                response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
-                                        '/BuiltInMods/LKExperienceEnhancement.zip', stream=True,
-                                        proxies=proxies, timeout=5000)
-                status = response.status_code
-                if status == 200:
-                    if full_gui:
-                        gui.safely_set_download_progress_text('下载体验增强包——下载中')
-                    with open(output_file, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=1024):
-                            if chunk:
-                                f.write(chunk)
-                    ee_ready = True
-                    if full_gui:
-                        gui.safely_set_download_progress_text('下载体验增强包——完成')
-                elif full_gui:
-                    gui.safely_set_download_progress_text(f'下载体验增强包——失败（{status}）')
-            except requests.exceptions.RequestException:
+            gui.safely_set_install_progress_text('安装体验增强包')
+            gui.safely_set_download_progress_text('下载体验增强包——连接中')
+        output_file = Path('l10n_installer').joinpath('downloads').joinpath('LK_EE.zip')
+        ee_ready = False
+        try:
+            response = requests.get('https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main'
+                                    '/BuiltInMods/LKExperienceEnhancement.zip', stream=True,
+                                    proxies=proxies, timeout=5000)
+            status = response.status_code
+            if status == 200:
                 if full_gui:
-                    gui.safely_set_download_progress_text('下载体验增强包——请求异常')
-            if ee_ready:
-                for run_dir in run_dirs:
-                    target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath(
-                        'res_mods' if is_release else 'res')
-                    with zipfile.ZipFile(output_file, 'r') as mo_zip:
-                        process_possible_gbk_zip(mo_zip)
-                        mo_zip.extractall(target_path)
+                    gui.safely_set_download_progress_text('下载体验增强包——下载中')
+                with open(output_file, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            f.write(chunk)
+                ee_ready = True
                 if full_gui:
-                    gui.safely_set_install_progress_text('安装体验增强包——完成')
+                    gui.safely_set_download_progress_text('下载体验增强包——完成')
             elif full_gui:
-                gui.safely_set_install_progress_text('安装体验增强包——失败')
+                gui.safely_set_download_progress_text(f'下载体验增强包——失败（{status}）')
+        except requests.exceptions.RequestException:
+            if full_gui:
+                gui.safely_set_download_progress_text('下载体验增强包——请求异常')
+        if ee_ready:
+            for run_dir in run_dirs:
+                target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods')
+                with zipfile.ZipFile(output_file, 'r') as mo_zip:
+                    process_possible_gbk_zip(mo_zip)
+                    mo_zip.extractall(target_path)
+            if full_gui:
+                gui.safely_set_install_progress_text('安装体验增强包——完成')
+        elif full_gui:
+            gui.safely_set_install_progress_text('安装体验增强包——失败')
     # 汉化包
     gui.safely_set_install_progress(progress=30.0)
     if full_gui:
@@ -1177,7 +1188,7 @@ def _install_update(
     dir_progress = 1
     for run_dir in run_dirs:
         execution_time = str(time.time_ns())
-        target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods' if is_release else 'res')
+        target_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('res_mods')
         version_info_file: Optional[Path] = None
         if fetched_file.endswith('.zip'):
             extracted_path = Path('l10n_installer').joinpath('downloads').joinpath('extracted_mo')
@@ -1224,9 +1235,9 @@ def _install_update(
             mkdir(mo_dir)
             old_mo = mo_dir.joinpath('global.mo')
             old_mo_backup = mo_dir.joinpath('global.mo.old')
-            if not is_release:
-                if not os.path.isfile(old_mo_backup) and os.path.isfile(old_mo):
-                    shutil.copy(old_mo, old_mo_backup)
+            # if not is_release:
+            #     if not os.path.isfile(old_mo_backup) and os.path.isfile(old_mo):
+            #         shutil.copy(old_mo, old_mo_backup)
             shutil.copy(fetched_file, old_mo)
 
             info_path = game_path.joinpath('bin').joinpath(run_dir).joinpath('l10n')
@@ -1258,6 +1269,13 @@ def _install_update(
         parse_game_version(gui, gui.get_game_path())
         gui.root.after(0, gui.popup_result, nothing_wrong)
     return nothing_wrong
+
+
+def fix_paths(build_dir: Path):
+    if not build_dir.is_dir():
+        return
+    with open(build_dir.joinpath('paths.xml'), 'w', encoding='utf-8') as file:
+        file.write(builtin_paths_xml)
 
 
 # Returns (output_file: str, remote_version: str, should_skip: bool)
