@@ -26,7 +26,7 @@ import webbrowser
 import winreg
 # pip install urllib3==1.25.11
 # The newer urllib has break changes.
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as Et
 import zipfile
 from datetime import datetime
 from optparse import OptionParser
@@ -628,7 +628,7 @@ class LocalizationInstaller:
                 preferences_path = Path(lgc_dir_str).parent.joinpath('preferences.xml')
                 if not preferences_path.is_file():
                     return []
-                pref_root = ET.parse(preferences_path).getroot()
+                pref_root = Et.parse(preferences_path).getroot()
                 games_block = pref_root.find('.//application/games_manager/games')
                 games = games_block.findall('.//game')
                 if not games:
@@ -808,7 +808,7 @@ class LocalizationInstaller:
         if not game_info_file.is_file():
             self.detect_steam_game_status(game_path)
             return
-        game_info = ET.parse(game_info_file)
+        game_info = Et.parse(game_info_file)
         game_id = game_info.find('.//game/id')
         if game_id is None:
             return
@@ -1022,7 +1022,7 @@ def is_valid_game_path(game_path: Path) -> bool:
         # For Steam Clients
         return game_path.joinpath('steam_api64.dll').is_file() and game_path.joinpath('bin').is_dir()
     try:
-        game_info = ET.parse(game_info_file)
+        game_info = Et.parse(game_info_file)
         game_id = game_info.find('.//game/id')
         if game_id is None:
             return False
