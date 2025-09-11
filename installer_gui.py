@@ -1664,4 +1664,4 @@ if __name__ == '__main__':
         else:
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv[1:]), None, 1)
 
-# pyinstaller -w -i resources/icon.ico --onefile --add-data "resources\*;resources" --version-file=version_file.txt installer_gui.py --clean
+# pyinstaller -w -i resources/icon.ico --add-data "resources\*;resources" --version-file=version_file.txt installer_gui.py --clean

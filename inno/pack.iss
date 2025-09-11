@@ -31,22 +31,21 @@ DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputBaseFilename="[常规]澪刻·汉化安装器{#SetupSetting("AppVersion")}"
-SetupIconFile=D:\dev\wows\l10n_installer_gui\resources\icon.ico
-Compression=lzma
+SetupIconFile=..\resources\icon.ico
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+UsePreviousAppDir=no
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "D:\dev\wows\l10n_installer_gui\dist\installer_gui\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "D:\dev\wows\l10n_installer_gui\dist\installer_gui\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\installer_gui\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\installer_gui\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
