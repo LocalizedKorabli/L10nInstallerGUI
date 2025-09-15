@@ -1,5 +1,5 @@
-# Korabli Localization Installer GUI
-# Copyright © 2024 澪刻LocalizedKorabli
+# Korabley Localization Installer GUI
+# Copyright © 2024-2025 澪刻LocalizedKorabli
 #
 # This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General
 # Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option)
@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.2.3'
+version = '0.2.4'
 
 builtin_locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -56,16 +56,6 @@ builtin_locale_config = '''<locale_config>
         <lang acceptLang="ru" egs="ru" fonts="CN" full="russian" languageBar="true" localeRfcName="ru" short="ru" />
     </lang_mapping>
 </locale_config>
-'''
-
-builtin_paths_xml = r'''<root>
-    <Paths>
-        <Path>..\res_mods</Path>
-        <Path key="15b8d" packages="..\..\..\res_packages" type="PFS">..\idx</Path>
-        <Path key="35d52">..\res</Path>
-        <Path key="77ee7" type="DLC">..\res_dlc</Path>
-    </Paths>
-</root>
 '''
 
 download_routes = {
@@ -457,7 +447,7 @@ class LocalizationInstaller:
         ToolTip(self.src_button, tooltip_source_code, delay=1.0)
 
         # 版权声明
-        self.license_text = ttk.Label(parent, text='© 2024 澪刻本地化')
+        self.license_text = ttk.Label(parent, text='© 2024-2025 澪刻本地化')
         self.license_text.grid(row=17, column=2, columnspan=3, pady=5)
         ToolTip(self.license_text, tooltip_license, delay=1.0)
 
@@ -1092,7 +1082,7 @@ def _install_update(
         return False
     for run_dir in run_dirs:
         build_path = game_path.joinpath('bin').joinpath(run_dir)
-        fix_paths(build_path.joinpath('bin64'))
+        fix_paths(build_path.joinpath('bin64'), run_dir)
         target_path = build_path.joinpath('res_mods')
         mkdir(target_path)
         if full_gui:
@@ -1271,11 +1261,48 @@ def _install_update(
     return nothing_wrong
 
 
-def fix_paths(build_dir: Path):
+def fix_paths(build_dir: Path, run_dir: str):
     if not build_dir.is_dir():
         return
-    with open(build_dir.joinpath('paths.xml'), 'w', encoding='utf-8') as file:
-        file.write(builtin_paths_xml)
+    xml_path = build_dir.joinpath('paths.xml')
+    try:
+        tree = Et.parse(xml_path)
+        root = tree.getroot()
+        paths_element = root.find('Paths')
+
+        if paths_element is None:
+            print(f"'{xml_path}'不包含<Paths>元素。")
+            return
+        current_paths = [path.text for path in paths_element.findall('Path')]
+        try:
+            run_dir_num = int(run_dir)
+        except Exception as e:
+            run_dir_num = 0
+        new_paths_to_add = [
+            ('..\\res_mods', {}),
+            ('..\\mods', {'type': 'mods'})
+        ] if run_dir_num >= 8823510 else [('..\\res_mods', {})]
+        elements_to_insert = []
+        for text, attrib in new_paths_to_add:
+            if text not in current_paths:
+                new_path_element = Et.Element('Path', attrib=attrib)
+                new_path_element.text = text
+                elements_to_insert.append(new_path_element)
+            else:
+                print(f"<Path>{text}</Path> 已存在，跳过。")
+        if elements_to_insert:
+            for element in reversed(elements_to_insert):
+                paths_element.insert(0, element)
+            tree.write(xml_path)
+            print(f"已更新'{xml_path}'。")
+        else:
+            print("所有需要添加的Path都已存在，无需更新。")
+    except FileNotFoundError:
+        print(f"未找到'{xml_path}'")
+    except Et.ParseError as e:
+        print(f"解析XML文件时出错: {e}")
+    except Exception as e:
+        print(f"修改XML时出现异常：{e}")
 
 
 # Returns (output_file: str, remote_version: str, should_skip: bool)

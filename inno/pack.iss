@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "澪刻·汉化安装器"
-#define MyAppVersion "0.2.3"
+#define MyAppVersion "0.2.4"
 #define MyAppPublisher "LocalizedKorabli"
 #define MyAppURL "https://github.com/LocalizedKorabli"
 #define MyAppExeName "installer_gui.exe"
