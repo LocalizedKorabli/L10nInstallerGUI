@@ -46,7 +46,7 @@ mods_link = 'https://tapio.lanzn.com/b0nxzso2b'
 project_repo_link = 'https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/'
 installer_repo_link = 'https://github.com/LocalizedKorabli/L10nInstallerGUI/'
 
-version = '0.2.4'
+version = '0.2.5'
 
 builtin_locale_config = '''<locale_config>
     <locale_id>ru</locale_id>
@@ -93,8 +93,8 @@ download_routes = {
 }
 
 server_regions_dict: Dict[str, Tuple[str, bool]] = {
-    'WOWS.RU.PRODUCTION': ('ru', True),
-    'WOWS.RPT.PRODUCTION': ('ru', False),
+    'MK.RU.PRODUCTION': ('ru', True),
+    'MK.RPT.PRODUCTION': ('ru', False),
     'WOWS.WW.PRODUCTION': ('zh_sg', True),
     'WOWS.PT.PRODUCTION': ('zh_sg', False),
     'WOWS.CN.PRODUCTION': ('zh_cn', True)
@@ -1016,7 +1016,7 @@ def is_valid_game_path(game_path: Path) -> bool:
         game_id = game_info.find('.//game/id')
         if game_id is None:
             return False
-        return 'WOWS' in game_id.text
+        return 'MK' in game_id.text or 'WOWS' in game_id.text
     except Exception:
         return False
 
